@@ -24,6 +24,7 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
   String _filtroGrado = 'Todos';
   String _ordenarPor = 'nombre'; // nombre, fecha, estado
   String _filtroEstado = 'todos'; // activos, deshabilitados, todos - CAMBIO: inicia en 'todos'
+  String _tipoUsuario = 'todos'; // estudiantes, maestros, todos
   
   final Map<String, List<Map<String, String>>> _gradosPorNivel = {
     'Primaria': [
@@ -56,13 +57,21 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
       _filtroGrado = 'Todos';
       _ordenarPor = 'nombre';
       _filtroEstado = 'todos';
+      _tipoUsuario = 'todos';
       _searchController.clear();
     });
   }
 
   /// Aplica todos los filtros a la lista de estudiantes
-  List<UserModel> _aplicarFiltros(List<UserModel> estudiantes) {
-    var filtrados = estudiantes;
+  List<UserModel> _aplicarFiltros(List<UserModel> usuarios) {
+    var filtrados = usuarios;
+
+    // Filtro de tipo de usuario (estudiantes/maestros)
+    if (_tipoUsuario == 'estudiantes') {
+      filtrados = filtrados.where((u) => u.tipoUsuario == 'alumno').toList();
+    } else if (_tipoUsuario == 'maestros') {
+      filtrados = filtrados.where((u) => u.tipoUsuario == 'maestro').toList();
+    }
 
     // Filtro de búsqueda
     final query = _searchController.text.toLowerCase();
@@ -299,6 +308,51 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
     }
   }
 
+  void _mostrarFiltroTipoUsuario() {
+    showDialog(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Filtrar por Tipo de Usuario'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () {
+              setState(() => _tipoUsuario = 'todos');
+              Navigator.pop(context);
+            },
+            child: const Text('Todos', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          SimpleDialogOption(
+            onPressed: () {
+              setState(() => _tipoUsuario = 'estudiantes');
+              Navigator.pop(context);
+            },
+            child: const Text('👥 Estudiantes'),
+          ),
+          SimpleDialogOption(
+            onPressed: () {
+              setState(() => _tipoUsuario = 'maestros');
+              Navigator.pop(context);
+            },
+            child: const Text('👨‍🏫 Maestros'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getEtiquetaTipoUsuario(String valor) {
+    switch (valor) {
+      case 'estudiantes':
+        return 'Tipo: Estudiantes';
+      case 'maestros':
+        return 'Tipo: Maestros';
+      case 'todos':
+        return 'Tipo: Todos';
+      default:
+        return 'Tipo';
+    }
+  }
+
   void _mostrarFormularioNuevo() {
     showDialog(
       context: context,
@@ -336,7 +390,7 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gestión de Usuarios'),
+        title: const Text('Gestión de Usuarios (Estudiantes y Maestros)'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -374,6 +428,20 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
+                    // Filtro de tipo de usuario
+                    FilterChip(
+                      label: const Text('Tipo'),
+                      onSelected: (_) => _mostrarFiltroTipoUsuario(),
+                    ),
+
+                    // Mostrar tipo seleccionado
+                    if (_tipoUsuario != 'todos')
+                      Chip(
+                        label: Text(_getEtiquetaTipoUsuario(_tipoUsuario)),
+                        onDeleted: () => setState(() => _tipoUsuario = 'todos'),
+                        deleteIcon: const Icon(Icons.close, size: 18),
+                      ),
+
                     // Filtro de grado
                     FilterChip(
                       label: const Text('Grado'),
@@ -410,27 +478,23 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
                       label: Text(_getEtiquetaEstado(_filtroEstado)),
                     ),
 
-                    // Botón de limpiar filtros
-                    if (_filtroGrado != 'Todos' || 
-                        _ordenarPor != 'nombre' || 
-                        _filtroEstado != 'todos' || 
-                        _searchController.text.isNotEmpty)
-                      ActionChip(
-                        label: const Text('Limpiar filtros'),
-                        avatar: const Icon(Icons.clear, size: 18),
-                        onPressed: _limpiarFiltros,
-                        backgroundColor: Colors.orange.shade100,
-                      ),
+                    // Botón de limpiar filtros - SIEMPRE VISIBLE
+                    ActionChip(
+                      label: const Text('Limpiar filtros'),
+                      avatar: const Icon(Icons.clear, size: 18),
+                      onPressed: _limpiarFiltros,
+                      backgroundColor: Colors.orange.shade100,
+                    ),
                   ],
                 ),
               ],
             ),
             const SizedBox(height: 16),
 
-            // Lista de estudiantes
+            // Lista de usuarios (estudiantes y maestros)
             Expanded(
               child: StreamBuilder<List<UserModel>>(
-                stream: _adminService.streamEstudiantes(),
+                stream: _adminService.streamUsuarios(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
@@ -442,8 +506,8 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
                     );
                   }
 
-                  final estudiantes = snapshot.data ?? [];
-                  final filtrados = _aplicarFiltros(estudiantes);
+                  final usuarios = snapshot.data ?? [];
+                  final filtrados = _aplicarFiltros(usuarios);
 
                   if (filtrados.isEmpty) {
                     return Center(
@@ -461,41 +525,65 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
                   return ListView.builder(
                     itemCount: filtrados.length,
                     itemBuilder: (context, index) {
-                      final est = filtrados[index];
+                      final usr = filtrados[index];
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
                         elevation: 2,
                         child: ListTile(
                           leading: CircleAvatar(
-                            child: Text(est.nombre[0].toUpperCase()),
+                            child: Text(usr.nombre[0].toUpperCase()),
                           ),
                           title: Text(
-                            est.nombre,
+                            usr.nombre,
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const SizedBox(height: 4),
-                              Text(est.email, style: const TextStyle(fontSize: 12)),
+                              Text(usr.email, style: const TextStyle(fontSize: 12)),
                               const SizedBox(height: 4),
                               Row(
                                 children: [
-                                  Text(
-                                    'Grado: ${_traducirGrado(est.gradoId)}',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Chip(
-                                    label: Text(
-                                      est.activo ? 'Activo' : 'Inactivo',
-                                      style: const TextStyle(fontSize: 11),
+                                  // Mostrar grado solo si es estudiante
+                                  if (usr.tipoUsuario == 'alumno')
+                                    Expanded(
+                                      child: Text(
+                                        'Grado: ${_traducirGrado(usr.gradoId)}',
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    )
+                                  else
+                                    Expanded(
+                                      child: Text(
+                                        'Rol: ${usr.tipoUsuario == 'maestro' ? '👨‍🏫 Maestro' : '⚙️ Admin'}',
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
                                     ),
-                                    backgroundColor: est.activo
-                                        ? Colors.green.shade100
-                                        : Colors.red.shade100,
-                                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                                  ),
+                                  const SizedBox(width: 12),
+                                  // Mostrar estado de aprobación si es maestro
+                                  if (usr.tipoUsuario == 'maestro')
+                                    Chip(
+                                      label: Text(
+                                        (usr.aprobado ?? false) ? 'Aprobado' : 'Pendiente',
+                                        style: const TextStyle(fontSize: 11),
+                                      ),
+                                      backgroundColor: (usr.aprobado ?? false)
+                                          ? Colors.green.shade100
+                                          : Colors.orange.shade100,
+                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                    )
+                                  else
+                                    Chip(
+                                      label: Text(
+                                        usr.activo ? 'Activo' : 'Inactivo',
+                                        style: const TextStyle(fontSize: 11),
+                                      ),
+                                      backgroundColor: usr.activo
+                                          ? Colors.green.shade100
+                                          : Colors.red.shade100,
+                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                    ),
                                 ],
                               ),
                             ],
@@ -503,34 +591,12 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
                           trailing: PopupMenuButton<String>(
                             onSelected: (value) async {
                               if (value == 'edit') {
-                                showDialog(
-                                  context: context,
-                                  builder: (context) => AlertDialog(
-                                    title: const Text('Editar Usuario'),
-                                    content: Text('¿Deseas editar a ${est.nombre}?'),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(context),
-                                        child: const Text('Cancelar'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () {
-                                          Navigator.pop(context);
-                                          _mostrarFormularioEdicion(est);
-                                        },
-                                        style: TextButton.styleFrom(
-                                          foregroundColor: Colors.blue,
-                                        ),
-                                        child: const Text('Editar'),
-                                      ),
-                                    ],
-                                  ),
-                                );
+                                _mostrarFormularioEdicion(usr);
                               } else if (value == 'toggle') {
-                                final accion = est.activo ? 'Deshabilitar Usuario' : 'Habilitar Usuario';
-                                final mensaje = est.activo
-                                    ? '¿Estás seguro de que deseas deshabilitar a ${est.nombre}?'
-                                    : '¿Estás seguro de que deseas habilitar a ${est.nombre}?';
+                                final accion = usr.activo ? 'Deshabilitar Usuario' : 'Habilitar Usuario';
+                                final mensaje = usr.activo
+                                    ? '¿Estás seguro de que deseas deshabilitar a ${usr.nombre}?'
+                                    : '¿Estás seguro de que deseas habilitar a ${usr.nombre}?';
                                 showDialog(
                                   context: context,
                                   builder: (context) => AlertDialog(
@@ -545,8 +611,8 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
                                         onPressed: () async {
                                           Navigator.pop(context);
                                           final success = await _adminService.cambiarEstadoEstudiante(
-                                            est.id,
-                                            !est.activo,
+                                            usr.id,
+                                            !usr.activo,
                                           );
 
                                           if (mounted) {
@@ -554,9 +620,9 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
                                               SnackBar(
                                                 content: Text(
                                                   success
-                                                      ? (est.activo
-                                                          ? '❌ ${est.nombre} deshabilitado'
-                                                          : '✅ ${est.nombre} habilitado')
+                                                      ? (usr.activo
+                                                          ? '❌ ${usr.nombre} deshabilitado'
+                                                          : '✅ ${usr.nombre} habilitado')
                                                       : '⚠️ Error al actualizar estado',
                                                 ),
                                               ),
@@ -564,9 +630,9 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
                                           }
                                         },
                                         style: TextButton.styleFrom(
-                                          foregroundColor: est.activo ? Colors.orange : Colors.green,
+                                          foregroundColor: usr.activo ? Colors.orange : Colors.green,
                                         ),
-                                        child: Text(est.activo ? 'Deshabilitar' : 'Habilitar'),
+                                        child: Text(usr.activo ? 'Deshabilitar' : 'Habilitar'),
                                       ),
                                     ],
                                   ),
@@ -577,7 +643,7 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
                                   builder: (context) => AlertDialog(
                                     title: const Text('Eliminar Usuario'),
                                     content: Text(
-                                      '¿Estás seguro de que deseas eliminar a ${est.nombre}? Esta acción no se puede deshacer.',
+                                      '¿Estás seguro de que deseas eliminar a ${usr.nombre}? Esta acción no se puede deshacer.',
                                     ),
                                     actions: [
                                       TextButton(
@@ -587,14 +653,14 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
                                       TextButton(
                                         onPressed: () async {
                                           Navigator.pop(context);
-                                          final success = await _adminService.eliminarEstudiante(est.id);
+                                          final success = await _adminService.eliminarEstudiante(usr.id);
 
                                           if (mounted) {
                                             ScaffoldMessenger.of(context).showSnackBar(
                                               SnackBar(
                                                 content: Text(
                                                   success
-                                                      ? '🗑️ ${est.nombre} eliminado'
+                                                      ? '🗑️ ${usr.nombre} eliminado'
                                                       : '⚠️ Error al eliminar',
                                                 ),
                                               ),
@@ -627,12 +693,12 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
                                 child: Row(
                                   children: [
                                     Icon(
-                                      est.activo ? Icons.block : Icons.check_circle,
+                                      usr.activo ? Icons.block : Icons.check_circle,
                                       size: 18,
-                                      color: est.activo ? Colors.orange : Colors.green,
+                                      color: usr.activo ? Colors.orange : Colors.green,
                                     ),
                                     const SizedBox(width: 8),
-                                    Text(est.activo ? 'Deshabilitar' : 'Habilitar'),
+                                    Text(usr.activo ? 'Deshabilitar' : 'Habilitar'),
                                   ],
                                 ),
                               ),

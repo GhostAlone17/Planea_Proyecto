@@ -7,7 +7,9 @@ import '../../services/authentication_service.dart';
 import '../../services/admin_service.dart';
 import '../../models/category_model.dart';
 import '../../services/quiz_service.dart';
+import '../../utils/grado_utils.dart';
 import '../quiz_screen.dart';
+import '../cambiar_password_screen.dart';
 
 /// Pantalla principal del estudiante
 /// Muestra categorías disponibles, progreso general y acceso a tests
@@ -26,13 +28,58 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   late Future<List<CategoryModel>> _futureCategories;
   StudentReportModel? _reporteEstudiante;
   String _studentName = 'Estudiante';
+  String _gradoEstudiante = 'Primaria'; // ✨ NUEVO: Grado del estudiante
 
   @override
   void initState() {
     super.initState();
+    // Inicializar siempre con categorías por defecto
     _futureCategories = _quizService.getCategories();
+    // Luego intentar cargar por grado
+    _cargarGradoYCategorias();
     _cargarReporte();
     _cargarNombreEstudiante();
+  }
+
+  /// ✨ NUEVO: Carga el grado del estudiante y actualiza categorías si es posible
+  Future<void> _cargarGradoYCategorias() async {
+    try {
+      final authService = context.read<AuthenticationService>();
+      final userId = authService.currentUser?.uid;
+
+      if (userId != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('usuarios')
+            .doc(userId)
+            .get();
+
+        if (userDoc.exists) {
+          // Intentar primero con 'gradoNombre', luego con 'gradoId'
+          String? gradoId = userDoc.data()?['gradoNombre'] as String?;
+          if (gradoId == null || gradoId.isEmpty) {
+            gradoId = userDoc.data()?['gradoId'] as String?;
+          }
+
+          if (gradoId != null && gradoId.isNotEmpty) {
+            // Convertir a nombre legible
+            final gradoNombre = GradoUtils.getNombreGrado(gradoId);
+            print('✅ Grado cargado desde Firestore: $gradoId -> $gradoNombre');
+            if (mounted) {
+              setState(() => _gradoEstudiante = gradoNombre);
+            }
+            // Cargar categorías filtradas por grado (usar el nombre legible)
+            _futureCategories = _quizService.getCategoriesByGrade(gradoNombre);
+          } else {
+            print('⚠️ No se encontró gradoNombre ni gradoId para el usuario');
+          }
+        } else {
+          print('⚠️ Documento de usuario no existe');
+        }
+      }
+    } catch (e) {
+      print('❌ Error cargando grado: $e');
+      // Mantener el fallback: categorías generales
+    }
   }
 
   Future<void> _cargarNombreEstudiante() async {
@@ -104,16 +151,38 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('PLANEA - Matemáticas'),
+        title: const Text(
+          'PLANEA • Matemáticas',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+        ),
         elevation: 0,
+        centerTitle: false,
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'logout') {
                 _logout();
+              } else if (value == 'cambiar_password') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CambiarPasswordScreen(),
+                  ),
+                );
               }
             },
             itemBuilder: (BuildContext context) => [
+              const PopupMenuItem<String>(
+                value: 'cambiar_password',
+                child: Row(
+                  children: [
+                    Icon(Icons.lock, color: Colors.blue, size: 20),
+                    SizedBox(width: 12),
+                    Text('Cambiar contraseña'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
               const PopupMenuItem<String>(
                 value: 'logout',
                 child: Row(
@@ -139,10 +208,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             // Saludo personalizado - FULL WIDTH
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [AppConstants.colorPrimario, AppConstants.colorPrimario.withOpacity(0.7)],
+                  colors: [AppConstants.colorPrimario, AppConstants.colorPrimario.withOpacity(0.75)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -152,17 +221,32 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 children: [
                   Text(
                     '¡Hola, $_studentName!',
-                    style: TextStyle(
-                      fontSize: 18,
+                    style: const TextStyle(
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.school, color: Colors.white70, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Grado: $_gradoEstudiante',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 4),
-                  Text(
-                    'Prepárate para el examen PLANEA',
+                  const Text(
+                    '📚 Prepárate para el examen PLANEA',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.white70,

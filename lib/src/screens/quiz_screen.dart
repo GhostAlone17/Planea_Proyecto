@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import '../config/app_constants.dart';
 import '../models/category_model.dart';
@@ -24,7 +22,6 @@ class QuizScreen extends StatefulWidget {
 
 class _QuizScreenState extends State<QuizScreen> {
   final _quizService = QuizService();
-  final _rand = Random();
 
   late QuizProgressModel _progress;
   QuestionModel? _currentQuestion;
@@ -44,9 +41,12 @@ class _QuizScreenState extends State<QuizScreen> {
       setState(() => _isLoading = true);
       final q = await _quizService.getCurrentQuestion(_progress);
       if (!mounted) return;
+      
+      // ✨ MEJORA: Obtener orden de opciones guardado (aleatoriedad determinística)
+      _optionOrder = await _quizService.getOptionOrderForCurrentQuestion(_progress);
+      
       setState(() {
         _currentQuestion = q;
-        _optionOrder = [0, 1, 2, 3]..shuffle(_rand); // aleatorizar opciones
         _selectedIndex = null;
         _isLoading = false;
       });
@@ -91,9 +91,10 @@ class _QuizScreenState extends State<QuizScreen> {
         );
       } else {
         // Siguiente pregunta
+        _optionOrder = await _quizService.getOptionOrderForCurrentQuestion(_progress);
+        
         setState(() {
           _currentQuestion = q;
-          _optionOrder = [0, 1, 2, 3]..shuffle(_rand);
           _selectedIndex = null;
           _isLoading = false;
         });
@@ -136,6 +137,8 @@ class _QuizScreenState extends State<QuizScreen> {
   Widget build(BuildContext context) {
     final q = _currentQuestion;
     final isLastQuestion = _progress.currentIndex + 1 == _progress.total;
+    final respondidas = _progress.respuestas.where((r) => r != null).length;
+    final sinResponder = _progress.total - respondidas;
 
     return WillPopScope(
       onWillPop: () async {
@@ -144,22 +147,36 @@ class _QuizScreenState extends State<QuizScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text('${widget.category.nombre} - Pregunta ${_progress.currentIndex + 1}/${_progress.total}'),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.category.nombre),
+              Text(
+                'Pregunta ${_progress.currentIndex + 1} de ${_progress.total}',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+              ),
+            ],
+          ),
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.close),
             onPressed: _confirmarSalir,
           ),
+          // Indicador compacto en el AppBar
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(6),
+            child: LinearProgressIndicator(
+              value: (_progress.currentIndex + 1) / _progress.total,
+              minHeight: 6,
+            ),
+          ),
         ),
         body: q == null || _isLoading
             ? const Center(child: CircularProgressIndicator())
-            : Column(
+            : Row(
                 children: [
-                  // Barra de progreso
-                  LinearProgressIndicator(
-                    value: (_progress.currentIndex + 1) / _progress.total,
-                    minHeight: 4,
-                  ),
+                  // Panel lateral con índice de preguntas
+                  _buildQuestionIndex(),
 
                   // Contenido principal
                   Expanded(
@@ -168,28 +185,29 @@ class _QuizScreenState extends State<QuizScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Indicador de progreso
+                          // Resumen de progreso
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
-                              Chip(
-                                label: Text('${_progress.currentIndex + 1} de ${_progress.total}'),
-                                backgroundColor: AppConstants.colorPrimario.withOpacity(0.2),
+                              _buildStatCard(
+                                'Respondidas',
+                                respondidas.toString(),
+                                Colors.green,
                               ),
-                              if (_progress.respuestas
-                                  .where((r) => r != null)
-                                  .length >
-                                  0)
-                                Chip(
-                                  label: Text(
-                                    '${_progress.respuestas.where((r) => r != null).length} respondidas',
-                                  ),
-                                  backgroundColor: Colors.green.withOpacity(0.2),
-                                ),
+                              _buildStatCard(
+                                'Sin responder',
+                                sinResponder.toString(),
+                                Colors.orange,
+                              ),
+                              _buildStatCard(
+                                'Total',
+                                _progress.total.toString(),
+                                AppConstants.colorPrimario,
+                              ),
                             ],
                           ),
 
-                          const SizedBox(height: AppConstants.paddingLarge),
+                          const SizedBox(height: AppConstants.paddingLarge * 1.5),
 
                           // Pregunta
                           Text(
@@ -252,33 +270,147 @@ class _QuizScreenState extends State<QuizScreen> {
                       ),
                     ),
                   ),
-
-                  // Botones de navegación
-                  Container(
-                    padding: const EdgeInsets.all(AppConstants.paddingLarge),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: _selectedIndex == null
-                                ? null
-                                : _isLoading
-                                    ? null
-                                    : _next,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: Text(
-                              isLastQuestion ? 'Finalizar' : 'Siguiente',
-                              style: const TextStyle(fontSize: 16),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
+        bottomNavigationBar: q == null || _isLoading
+            ? null
+            : Container(
+                padding: const EdgeInsets.all(AppConstants.paddingLarge),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _selectedIndex == null
+                            ? null
+                            : _isLoading
+                                ? null
+                                : _next,
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: Text(
+                          isLastQuestion ? 'Finalizar' : 'Siguiente',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
+
+  // Widget para el panel lateral de índice
+  Widget _buildQuestionIndex() {
+    return Container(
+      width: 60,
+      color: Colors.grey.shade100,
+      child: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Wrap(
+                direction: Axis.vertical,
+                spacing: 4,
+                runSpacing: 4,
+                children: List.generate(_progress.total, (index) {
+                  final isAnswered = _progress.respuestas[index] != null;
+                  final isCurrent = index == _progress.currentIndex;
+
+                  return GestureDetector(
+                    onTap: () {
+                      // Permitir navegar solo a preguntas respondidas o anterior/siguiente
+                      if (isAnswered || index == _progress.currentIndex) {
+                        // Cambiar pregunta localmente
+                        setState(() {
+                          _progress = _progress.copyWith(currentIndex: index);
+                          _loadCurrent();
+                        });
+                      }
+                    },
+                    child: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: isCurrent
+                            ? AppConstants.colorPrimario
+                            : isAnswered
+                                ? Colors.green.shade100
+                                : Colors.white,
+                        border: Border.all(
+                          color: isCurrent
+                              ? AppConstants.colorPrimario
+                              : isAnswered
+                                  ? Colors.green
+                                  : Colors.grey.shade300,
+                          width: isCurrent ? 2 : 1,
+                        ),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              '${index + 1}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isCurrent ? Colors.white : Colors.black,
+                                fontSize: 12,
+                              ),
+                            ),
+                            if (isAnswered)
+                              Icon(
+                                Icons.check,
+                                size: 12,
+                                color: isCurrent ? Colors.white : Colors.green,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Widget para tarjeta de estadísticas
+  Widget _buildStatCard(String label, String value, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: color,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

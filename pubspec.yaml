@@ -67,6 +67,12 @@ dependencies:
   connectivity_plus: ^5.0.0
   device_info_plus: ^9.1.0
   image_picker: ^1.1.0
+  
+  # ============ REPORTES Y EXPORTACIÓN ============
+  pdf: ^3.10.0
+  syncfusion_flutter_xlsio: ^25.1.35
+  path_provider: ^2.1.0
+  universal_html: ^2.2.0
 
 dev_dependencies:
   flutter_test:

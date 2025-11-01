@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'authentication_service.dart';
 import 'firestore_service.dart';
 import 'storage_service.dart';
+import 'admin_service.dart';
 
 /// Proveedores centralizados de servicios
 /// Todos los servicios de la app se registran aquí
@@ -31,13 +32,16 @@ class ServiceProviders {
   ];
 
   /// Método para agregar todos los providers a la app
-  /// Incluye Provider<StorageService>() de forma manual
+  /// Incluye Provider<StorageService>() y Provider<AdminService>() de forma manual
   static MultiProvider wrap(Widget child) {
     return MultiProvider(
       providers: [
         ...providers,
         Provider<StorageService>(
           create: (_) => StorageService(),
+        ),
+        Provider<AdminService>(
+          create: (_) => AdminService(),
         ),
       ],
       child: child,

@@ -13,11 +13,15 @@ class CategoryModel {
   /// Número total estimado de reactivos (si se conoce)
   final int? totalReactivos;
 
+  /// ✨ NUEVO: Grado para el cual es esta categoría ('Primaria', 'Secundaria', 'Preparatoria')
+  final String? grado;
+
   const CategoryModel({
     required this.id,
     required this.nombre,
     this.descripcion,
     this.totalReactivos,
+    this.grado,
   });
 
   Map<String, dynamic> toMap() => {
@@ -25,6 +29,7 @@ class CategoryModel {
         'nombre': nombre,
         'descripcion': descripcion,
         'totalReactivos': totalReactivos,
+        'grado': grado,
       };
 
   factory CategoryModel.fromMap(Map<String, dynamic> map) => CategoryModel(
@@ -32,5 +37,6 @@ class CategoryModel {
         nombre: map['nombre'],
         descripcion: map['descripcion'],
         totalReactivos: map['totalReactivos'],
+        grado: map['grado'],
       );
 }

@@ -4,6 +4,7 @@ import 'src/config/app_constants.dart';
 import 'src/screens/login_screen.dart';
 import 'src/screens/student/student_dashboard_screen.dart';
 import 'src/screens/admin/admin_dashboard.dart';
+import 'src/screens/teacher/teacher_dashboard.dart';
 import 'src/services/firebase_service.dart';
 import 'src/services/service_providers.dart';
 import 'package:provider/provider.dart';
@@ -101,6 +102,11 @@ class PlantelApp extends StatelessWidget {
                   // Admin o Docente
                   if (tipoUsuario == 'admin' || tipoUsuario == 'docente') {
                     return AdminDashboard();
+                  }
+                  
+                  // Maestro (profesor aprobado)
+                  if (tipoUsuario == 'maestro') {
+                    return TeacherDashboard();
                   }
 
                   // Estudiante (por defecto)

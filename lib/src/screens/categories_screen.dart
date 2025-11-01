@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../config/app_constants.dart';
 import '../services/quiz_service.dart';
 import '../services/auth_service.dart';
+import '../services/authentication_service.dart';
 import '../models/category_model.dart';
 import 'quiz_screen.dart';
 import 'user_profile_modal.dart';
@@ -18,11 +20,46 @@ class CategoriesScreen extends StatefulWidget {
 class _CategoriesScreenState extends State<CategoriesScreen> {
   final _quizService = QuizService();
   late Future<List<CategoryModel>> _futureCategories;
+  String? _gradoNombre;
 
   @override
   void initState() {
     super.initState();
-    _futureCategories = _quizService.getCategories();
+    _cargarCategorias();
+  }
+
+  Future<void> _cargarCategorias() async {
+    try {
+      // Obtener el grado del usuario actual
+      final authService = AuthenticationService();
+      final currentUser = authService.currentUser;
+      
+      if (currentUser != null) {
+        final doc = await FirebaseFirestore.instance
+            .collection('usuarios')
+            .doc(currentUser.uid)
+            .get();
+        
+        if (doc.exists) {
+          _gradoNombre = doc['gradoNombre'] as String?;
+        }
+      }
+
+      // Cargar categorías filtradas por grado
+      if (_gradoNombre != null && _gradoNombre!.isNotEmpty) {
+        _futureCategories = _quizService.getCategoriesByGrade(_gradoNombre!);
+        print('📚 Cargando categorías para grado: $_gradoNombre');
+      } else {
+        _futureCategories = _quizService.getCategories();
+        print('📚 Cargando todas las categorías (sin filtro de grado)');
+      }
+      
+      setState(() {});
+    } catch (e) {
+      print('Error cargando grado del usuario: $e');
+      _futureCategories = _quizService.getCategories();
+      if (mounted) setState(() {});
+    }
   }
 
   void _logout() {
@@ -56,7 +93,17 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('PLANEA - Matemáticas'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('PLANEA - Matemáticas'),
+            if (_gradoNombre != null)
+              Text(
+                '📚 $_gradoNombre',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+              ),
+          ],
+        ),
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) {

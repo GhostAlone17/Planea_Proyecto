@@ -37,51 +37,101 @@ class _AdminCategoriasScreenState extends State<AdminCategoriasScreen> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
-    final isTablet = screenWidth >= 600 && screenWidth < 1200;
-    final isWeb = screenWidth >= 1200;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Gestión de Categorías',
-          style: TextStyle(fontSize: isMobile ? 16 : 18),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Gestión de Categorías',
+              style: TextStyle(fontSize: isMobile ? 16 : 18),
+            ),
+            Text(
+              'PLANEA - Matemáticas',
+              style: TextStyle(
+                fontSize: isMobile ? 9 : 11,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ],
         ),
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: EdgeInsets.all(isMobile ? 8 : (isTablet ? 12 : 16)),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header compacto
-              Row(
+      body: _cargando
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: EdgeInsets.all(isMobile ? 16 : 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.category,
-                    size: isMobile ? 20 : 28,
-                    color: Colors.purple,
-                  ),
-                  SizedBox(width: isMobile ? 8 : 12),
-                  Expanded(
+                  // Bienvenida
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.purple.shade400, Colors.purple.shade600],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Categorías PLANEA',
+                        const Text(
+                          '📚 Categorías PLANEA',
                           style: TextStyle(
-                            fontSize: isMobile ? 16 : (isTablet ? 18 : 22),
+                            fontSize: 24,
                             fontWeight: FontWeight.bold,
+                            color: Colors.white,
                           ),
                         ),
+                        const SizedBox(height: 8),
                         Text(
-                          'Total: ${_categorias.length} categorías',
+                          'Total: ${_categorias.length} categorías disponibles',
                           style: TextStyle(
-                            fontSize: isMobile ? 10 : 12,
-                            color: Colors.grey,
+                            fontSize: 14,
+                            color: Colors.white.withOpacity(0.9),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Sección de categorías
+                  Text(
+                    'Temas de Evaluación',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Grid/Lista de categorías
+                  _buildCategoriesGrid(),
+                  const SizedBox(height: 32),
+
+                  // Información
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.blue.shade600),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Las categorías están predefinidas y cada una contiene reactivos específicos.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.blue.shade700,
+                            ),
                           ),
                         ),
                       ],
@@ -89,352 +139,110 @@ class _AdminCategoriasScreenState extends State<AdminCategoriasScreen> {
                   ),
                 ],
               ),
-              SizedBox(height: isMobile ? 12 : 20),
-
-              // Categorías en formato de lista compacta O grid según pantalla
-              _cargando
-                  ? const Center(child: CircularProgressIndicator())
-                  : isWeb
-                      ? _buildGridLayout(isWeb, isTablet, isMobile)
-                      : _buildListLayout(isMobile),
-
-              SizedBox(height: isMobile ? 16 : 24),
-
-              // Info card compacta
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue.shade200),
-                ),
-                child: Padding(
-                  padding: EdgeInsets.all(isMobile ? 12 : 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.info,
-                            color: Colors.blue.shade700,
-                            size: isMobile ? 20 : 24,
-                          ),
-                          SizedBox(width: isMobile ? 8 : 12),
-                          Expanded(
-                            child: Text(
-                              'Información PLANEA',
-                              style: TextStyle(
-                                fontSize: isMobile ? 13 : 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue.shade900,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: isMobile ? 8 : 12),
-                      Text(
-                        'Las 6 categorías de matemáticas del PLANEA son predefinidas y no pueden ser modificadas. Cada categoría contiene reactivos específicos que evalúan habilidades diferentes.',
-                        style: TextStyle(
-                          fontSize: isMobile ? 11 : 13,
-                          color: Colors.blue.shade900,
-                          height: 1.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 
-  /// Layout de grid para pantallas grandes (web)
-  Widget _buildGridLayout(bool isWeb, bool isTablet, bool isMobile) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: isWeb ? 3 : (isTablet ? 2 : 1),
-        childAspectRatio: isWeb ? 1.0 : (isTablet ? 1.2 : 1.8),
-        crossAxisSpacing: isWeb ? 20 : 12,
-        mainAxisSpacing: isWeb ? 20 : 12,
-      ),
-      itemCount: _categorias.length,
-      itemBuilder: (context, index) {
-        final categoria = _categorias[index];
-        return isWeb
-            ? _buildCategoryCardGrande(categoria)
-            : _buildCategoryCardCompacto(categoria);
-      },
-    );
-  }
-
-  /// Layout de lista para pantallas pequeñas (mobile/tablet)
-  Widget _buildListLayout(bool isMobile) {
+  /// Construye la lista de categorías en formato vertical
+  Widget _buildCategoriesGrid() {
     return Column(
       children: _categorias.map((categoria) {
         final numReactivos = _reactivosPorCategoria[categoria.id] ?? 0;
         return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: _buildCategoryListTile(categoria, numReactivos, isMobile),
+          padding: const EdgeInsets.only(bottom: 16),
+          child: _buildCategoryCard(categoria, numReactivos),
         );
       }).toList(),
     );
   }
 
-  /// Card compacto para grid (tablet/mobile)
-  Widget _buildCategoryCardCompacto(CategoryModelV2 categoria) {
-    final numReactivos = _reactivosPorCategoria[categoria.id] ?? 0;
-
+  /// Construye una tarjeta de categoría (lista horizontal)
+  Widget _buildCategoryCard(CategoryModelV2 categoria, int numReactivos) {
     return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 2,
       child: InkWell(
         onTap: () => _mostrarDetallesCategoria(categoria, numReactivos),
         borderRadius: BorderRadius.circular(12),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.purple.withOpacity(0.08),
-                Colors.purple.withOpacity(0.02),
-              ],
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Icono
-                Text(categoria.icono, style: const TextStyle(fontSize: 32)),
-                SizedBox(height: 8),
-
-                // Nombre
-                Text(
-                  categoria.nombre,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              // Icono en contenedor
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.purple.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                SizedBox(height: 4),
-
-                // Descripción
-                Expanded(
-                  child: Text(
-                    categoria.descripcion,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                child: Text(
+                  categoria.icono,
+                  style: const TextStyle(fontSize: 32),
                 ),
-                SizedBox(height: 8),
+              ),
+              const SizedBox(width: 16),
 
-                // Badge de reactivos
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: numReactivos > 0
-                        ? Colors.green.shade100
-                        : Colors.orange.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '$numReactivos 📝',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: numReactivos > 0
-                          ? Colors.green.shade900
-                          : Colors.orange.shade900,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Card grande para web - Más visual y atractivo
-  Widget _buildCategoryCardGrande(CategoryModelV2 categoria) {
-    final numReactivos = _reactivosPorCategoria[categoria.id] ?? 0;
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        onTap: () => _mostrarDetallesCategoria(categoria, numReactivos),
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.purple.withOpacity(0.1),
-                Colors.purple.withOpacity(0.02),
-              ],
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Icono grande
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.purple.shade100,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    categoria.icono,
-                    style: const TextStyle(fontSize: 52),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Nombre
-                Text(
-                  categoria.nombre,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-
-                // Descripción
-                Text(
-                  categoria.descripcion,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey,
-                    height: 1.5,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 16),
-
-                // Divider
-                Container(
-                  height: 1,
-                  color: Colors.grey.shade200,
-                ),
-                const SizedBox(height: 16),
-
-                // Badge de reactivos grande
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: numReactivos > 0
-                        ? Colors.green.shade100
-                        : Colors.orange.shade100,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: numReactivos > 0
-                          ? Colors.green.shade300
-                          : Colors.orange.shade300,
-                      width: 2,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        numReactivos > 0 ? '✅' : '⚠️',
-                        style: const TextStyle(fontSize: 16),
+              // Contenido expandible
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Nombre
+                    Text(
+                      categoria.nombre,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '$numReactivos ${numReactivos == 1 ? 'Reactivo' : 'Reactivos'}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: numReactivos > 0
-                              ? Colors.green.shade900
-                              : Colors.orange.shade900,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+                    ),
+                    const SizedBox(height: 4),
 
-  /// ListTile compacto para lista
-  Widget _buildCategoryListTile(CategoryModelV2 categoria, int numReactivos, bool isMobile) {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: ListTile(
-        onTap: () => _mostrarDetallesCategoria(categoria, numReactivos),
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: isMobile ? 12 : 16,
-          vertical: isMobile ? 8 : 10,
-        ),
-        leading: Text(
-          categoria.icono,
-          style: TextStyle(fontSize: isMobile ? 24 : 28),
-        ),
-        title: Text(
-          categoria.nombre,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: isMobile ? 13 : 14,
-          ),
-        ),
-        subtitle: Text(
-          categoria.descripcion,
-          style: TextStyle(fontSize: isMobile ? 10 : 11),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: numReactivos > 0
-                ? Colors.green.shade100
-                : Colors.orange.shade100,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            '$numReactivos',
-            style: TextStyle(
-              fontSize: isMobile ? 10 : 11,
-              fontWeight: FontWeight.bold,
-              color: numReactivos > 0
-                  ? Colors.green.shade900
-                  : Colors.orange.shade900,
-            ),
+                    // Descripción
+                    Text(
+                      categoria.descripcion,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Badge de reactivos + flecha
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: numReactivos > 0
+                          ? Colors.orange.shade100
+                          : Colors.red.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '$numReactivos',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: numReactivos > 0
+                            ? Colors.orange.shade900
+                            : Colors.red.shade900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Icon(
+                    Icons.arrow_forward,
+                    color: Colors.purple,
+                    size: 20,
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),

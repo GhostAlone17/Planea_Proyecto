@@ -1,4 +1,10 @@
 /// Modelo que representa una sesión de quiz activa o completada
+/// 
+/// CAMPOS NUEVOS para sincronización offline y aleatoriedad determinística:
+/// - randomSeed: Seed para reproducir el mismo orden de preguntas/opciones
+/// - optionOrders: Orden de opciones para cada pregunta (para reproducibilidad)
+/// - lastSyncTime: Último momento sincronizado con Firestore
+/// - syncVersion: Versión de datos para detectar conflictos
 class QuizSessionModel {
   final String sessionId;
   final String userId;
@@ -11,6 +17,18 @@ class QuizSessionModel {
   final String status; // 'en_progreso', 'completado', 'abandonado'
   final int? score;
   final Map<int, int> answers; // índice -> respuesta seleccionada
+  
+  /// Seed para reproducir aleatoriedad (garantiza mismo orden cada vez)
+  final int randomSeed;
+  
+  /// Orden de opciones para cada pregunta: questionIndex -> [0,1,2,3]
+  final Map<int, List<int>> optionOrders;
+  
+  /// Último timestamp sincronizado con Firestore
+  final DateTime? lastSyncTime;
+  
+  /// Versión de datos para resolver conflictos
+  final int syncVersion;
 
   QuizSessionModel({
     required this.sessionId,
@@ -24,7 +42,12 @@ class QuizSessionModel {
     this.status = 'en_progreso',
     this.score,
     Map<int, int>? answers,
-  }) : answers = answers ?? {};
+    required this.randomSeed,
+    Map<int, List<int>>? optionOrders,
+    this.lastSyncTime,
+    this.syncVersion = 1,
+  }) : answers = answers ?? {},
+       optionOrders = optionOrders ?? {};
 
   /// Calcula el progreso actual (0-100)
   double get progressPercentage {
@@ -48,6 +71,10 @@ class QuizSessionModel {
         'status': status,
         'score': score,
         'answers': answers,
+        'randomSeed': randomSeed,
+        'optionOrders': optionOrders.map((k, v) => MapEntry(k.toString(), v)),
+        'lastSyncTime': lastSyncTime,
+        'syncVersion': syncVersion,
       };
 
   /// Crea un modelo desde datos de Firestore
@@ -68,6 +95,16 @@ class QuizSessionModel {
           (map['answers'] as Map<String, dynamic>? ?? {})
               .map((k, v) => MapEntry(int.parse(k), v as int)),
         ),
+        randomSeed: map['randomSeed'] ?? 0,
+        optionOrders: map['optionOrders'] != null
+            ? (map['optionOrders'] as Map<String, dynamic>).map(
+                (k, v) => MapEntry(int.parse(k), List<int>.from(v as List)),
+              )
+            : {},
+        lastSyncTime: map['lastSyncTime'] != null
+            ? (map['lastSyncTime'] is DateTime ? map['lastSyncTime'] : DateTime.parse(map['lastSyncTime']))
+            : null,
+        syncVersion: map['syncVersion'] ?? 1,
       );
 
   /// Copia el modelo con valores opcionales
@@ -83,6 +120,10 @@ class QuizSessionModel {
     String? status,
     int? score,
     Map<int, int>? answers,
+    int? randomSeed,
+    Map<int, List<int>>? optionOrders,
+    DateTime? lastSyncTime,
+    int? syncVersion,
   }) =>
       QuizSessionModel(
         sessionId: sessionId ?? this.sessionId,
@@ -96,5 +137,9 @@ class QuizSessionModel {
         status: status ?? this.status,
         score: score ?? this.score,
         answers: answers ?? this.answers,
+        randomSeed: randomSeed ?? this.randomSeed,
+        optionOrders: optionOrders ?? this.optionOrders,
+        lastSyncTime: lastSyncTime ?? this.lastSyncTime,
+        syncVersion: syncVersion ?? this.syncVersion,
       );
 }

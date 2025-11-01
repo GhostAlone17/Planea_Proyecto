@@ -57,7 +57,40 @@ class Validators {
     return null;
   }
 
-  /// Valida una contraseña
+  /// Valida una contraseña (fuerte: 8+ caracteres, mayúscula, número)
+  /// SOLO para REGISTRO de nuevos usuarios
+  /// 
+  /// Parámetros:
+  /// - [value]: La contraseña a validar
+  /// - [minLength]: Longitud mínima (por defecto 8)
+  /// 
+  /// Retorna:
+  /// - `null` si es válida
+  /// - Mensaje de error si no cumple los requisitos
+  static String? password(String? value, {int minLength = 8}) {
+    if (value == null || value.isEmpty) {
+      return 'La contraseña es requerida';
+    }
+
+    if (value.length < minLength) {
+      return 'La contraseña debe tener al menos $minLength caracteres';
+    }
+
+    // Verificar mayúscula
+    if (!value.contains(RegExp(r'[A-Z]'))) {
+      return 'La contraseña debe contener al menos una mayúscula';
+    }
+
+    // Verificar número
+    if (!value.contains(RegExp(r'[0-9]'))) {
+      return 'La contraseña debe contener al menos un número';
+    }
+
+    return null;
+  }
+
+  /// Valida una contraseña para LOGIN (débil: solo longitud mínima)
+  /// Permite contraseñas antiguas sin mayúscula ni número
   /// 
   /// Parámetros:
   /// - [value]: La contraseña a validar
@@ -65,14 +98,8 @@ class Validators {
   /// 
   /// Retorna:
   /// - `null` si es válida
-  /// - Mensaje de error si no cumple los requisitos
-  /// 
-  /// Ejemplo:
-  /// ```dart
-  /// final error = Validators.password('12345');
-  /// print(error); // "La contraseña debe tener al menos 6 caracteres"
-  /// ```
-  static String? password(String? value, {int minLength = 6}) {
+  /// - Mensaje de error si es muy corta
+  static String? passwordLogin(String? value, {int minLength = 6}) {
     if (value == null || value.isEmpty) {
       return 'La contraseña es requerida';
     }
@@ -201,6 +228,110 @@ class Validators {
 
     if (double.tryParse(value) == null) {
       return '$fieldName debe ser un número válido';
+    }
+
+    return null;
+  }
+
+  /// Valida un nombre (sin caracteres especiales, solo letras y espacios)
+  /// 
+  /// Parámetros:
+  /// - [value]: El nombre a validar
+  /// 
+  /// Retorna:
+  /// - `null` si es válido
+  /// - Mensaje de error si contiene caracteres especiales
+  /// 
+  /// Ejemplo:
+  /// ```dart
+  /// final error = Validators.nombre('Juan@123');
+  /// print(error); // "El nombre solo puede contener letras y espacios"
+  /// ```
+  static String? nombre(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'El nombre es requerido';
+    }
+
+    // Solo permite letras, espacios, acentos, ñ, puntos y apóstrofes
+    final nameRegex = RegExp(r"^[a-záéíóúñ\s.'-]+$", caseSensitive: false);
+
+    if (!nameRegex.hasMatch(value.trim())) {
+      return 'El nombre solo puede contener letras, espacios, puntos y apóstrofes';
+    }
+
+    if (value.trim().length < 3) {
+      return 'El nombre debe tener al menos 3 caracteres';
+    }
+
+    return null;
+  }
+
+  /// Valida que haya exactamente 4 opciones en un reactivo
+  /// 
+  /// Parámetros:
+  /// - [opciones]: Lista de opciones
+  /// 
+  /// Retorna:
+  /// - `null` si hay 4 opciones
+  /// - Mensaje de error si no hay 4
+  static String? opcionesCount(List<String>? opciones) {
+    if (opciones == null || opciones.isEmpty) {
+      return 'Debes agregar al menos 4 opciones';
+    }
+
+    if (opciones.length != 4) {
+      return 'Debe haber exactamente 4 opciones (actualmente: ${opciones.length})';
+    }
+
+    // Verificar que ninguna opción esté vacía
+    for (var i = 0; i < opciones.length; i++) {
+      if (opciones[i].trim().isEmpty) {
+        return 'La opción ${i + 1} no puede estar vacía';
+      }
+    }
+
+    return null;
+  }
+
+  /// Valida que la respuesta correcta sea válida
+  /// 
+  /// Parámetros:
+  /// - [respuestaCorrecta]: Índice de la respuesta correcta
+  /// - [totalOpciones]: Total de opciones disponibles
+  /// 
+  /// Retorna:
+  /// - `null` si es válido
+  /// - Mensaje de error si está fuera de rango
+  static String? respuestaCorrecta(int? respuestaCorrecta, int totalOpciones) {
+    if (respuestaCorrecta == null) {
+      return 'Debes seleccionar la respuesta correcta';
+    }
+
+    if (respuestaCorrecta < 0 || respuestaCorrecta >= totalOpciones) {
+      return 'La respuesta correcta debe estar entre 0 y ${totalOpciones - 1}';
+    }
+
+    return null;
+  }
+
+  /// Valida que opciones no estén duplicadas
+  /// 
+  /// Parámetros:
+  /// - [opciones]: Lista de opciones
+  /// 
+  /// Retorna:
+  /// - `null` si son únicas
+  /// - Mensaje de error si hay duplicados
+  static String? opcionesDuplicated(List<String>? opciones) {
+    if (opciones == null || opciones.length < 2) {
+      return null; // Si hay menos de 2, no puede haber duplicados
+    }
+
+    final trimmedOpciones = opciones.map((o) => o.trim().toLowerCase()).toList();
+    final uniqueOpciones = trimmedOpciones.toSet();
+
+    if (trimmedOpciones.length != uniqueOpciones.length) {
+      return 'No pueden haber opciones duplicadas';
     }
 
     return null;

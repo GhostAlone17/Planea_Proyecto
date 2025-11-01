@@ -34,8 +34,14 @@ class UserModel {
   /// Para alumnos: ID del grado o curso
   final String? gradoId;
 
+  /// Para alumnos: Nombre del grado ('Primaria', 'Secundaria', 'Preparatoria')
+  final String? gradoNombre;
+
   /// Para alumnos: lista de IDs de maestros asignados
   final List<String>? maestroIds;
+
+  /// ✨ NUEVO: Para maestros - indica si fue aprobado por admin
+  final bool? aprobado;
 
   /// Constructor principal del modelo de usuario
   UserModel({
@@ -50,7 +56,9 @@ class UserModel {
     this.activo = true,
     this.hijosIds,
     this.gradoId,
+    this.gradoNombre,
     this.maestroIds,
+    this.aprobado,
   });
 
   /// Convierte el modelo a un Map para guardarlo en base de datos
@@ -67,12 +75,30 @@ class UserModel {
       'activo': activo,
       'hijosIds': hijosIds,
       'gradoId': gradoId,
+      'gradoNombre': gradoNombre,
       'maestroIds': maestroIds,
+      'aprobado': aprobado,
     };
   }
 
   /// Crea una instancia de UserModel desde un Map (base de datos)
   factory UserModel.fromMap(Map<String, dynamic> map) {
+    // ✨ Manejar fechaRegistro que puede ser String o Timestamp de Firestore
+    DateTime fechaRegistro;
+    final fechaReg = map['fechaRegistro'];
+    if (fechaReg is String) {
+      fechaRegistro = DateTime.parse(fechaReg);
+    } else if (fechaReg != null) {
+      // Timestamp de Firestore
+      try {
+        fechaRegistro = (fechaReg as dynamic).toDate();
+      } catch (e) {
+        fechaRegistro = DateTime.now();
+      }
+    } else {
+      fechaRegistro = DateTime.now();
+    }
+
     return UserModel(
       id: map['id'] ?? '',
       nombre: map['nombre'] ?? '',
@@ -83,15 +109,17 @@ class UserModel {
           : [],
       fotoPerfil: map['fotoPerfil'],
       tokenNotificacion: map['tokenNotificacion'],
-      fechaRegistro: DateTime.parse(map['fechaRegistro']),
+      fechaRegistro: fechaRegistro,
       activo: map['activo'] ?? true,
       hijosIds: map['hijosIds'] != null 
           ? List<String>.from(map['hijosIds']) 
           : null,
       gradoId: map['gradoId'],
+      gradoNombre: map['gradoNombre'],
       maestroIds: map['maestroIds'] != null
           ? List<String>.from(map['maestroIds'])
           : null,
+      aprobado: map['aprobado'],
     );
   }
 
@@ -108,7 +136,9 @@ class UserModel {
     bool? activo,
     List<String>? hijosIds,
     String? gradoId,
+    String? gradoNombre,
     List<String>? maestroIds,
+    bool? aprobado,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -122,7 +152,9 @@ class UserModel {
       activo: activo ?? this.activo,
       hijosIds: hijosIds ?? this.hijosIds,
       gradoId: gradoId ?? this.gradoId,
+      gradoNombre: gradoNombre ?? this.gradoNombre,
       maestroIds: maestroIds ?? this.maestroIds,
+      aprobado: aprobado ?? this.aprobado,
     );
   }
   

@@ -38,16 +38,27 @@ class AuthenticationService extends ChangeNotifier {
   }
 
   /// Registra un nuevo usuario con email y contraseña
-  /// Automáticamente crea su documento en Firestore con tipoUsuario: 'alumno'
+  /// ✨ MEJORA: Permite registrarse como alumno o maestro
+  /// - Alumnos: aprobado = true (acceso inmediato)
+  /// - Maestros: aprobado = false (requiere validación admin)
+  /// 
+  /// Automáticamente crea su documento en Firestore
   Future<bool> register({
     required String email,
     required String password,
     required String displayName,
+    required String tipoUsuario, // 'alumno' o 'maestro'
+    String? gradoNombre, // Grado para alumnos: 'Primaria', 'Secundaria', 'Preparatoria'
+    bool mantenerSesion = false,
   }) async {
     try {
       _isLoading = true;
       _errorMessage = null;
       notifyListeners();
+
+      // Guardar sesión actual si se debe mantener
+      final adminUser = mantenerSesion ? _currentUser : null;
+      final adminEmail = adminUser?.email;
 
       final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
         email: email.trim(),
@@ -57,8 +68,11 @@ class AuthenticationService extends ChangeNotifier {
       // Actualizar nombre de usuario
       await userCredential.user?.updateDisplayName(displayName);
 
-      // ✨ NUEVO: Crear documento en Firestore automáticamente
+      // Crear documento en Firestore automáticamente
       if (userCredential.user != null) {
+        // ✨ NUEVA LÓGICA: Maestros requieren aprobación
+        final estaAprobado = tipoUsuario == 'alumno' ? true : false;
+        
         await FirebaseFirestore.instance
             .collection('usuarios')
             .doc(userCredential.user!.uid)
@@ -66,14 +80,31 @@ class AuthenticationService extends ChangeNotifier {
           'uid': userCredential.user!.uid,
           'email': email.trim(),
           'nombre': displayName,
-          'tipoUsuario': 'alumno', // Por defecto es alumno
+          'tipoUsuario': tipoUsuario, // ✨ NUEVO
           'activo': true,
+          'aprobado': estaAprobado, // ✨ NUEVO: Maestros = false
           'fechaRegistro': FieldValue.serverTimestamp(),
-          'gradoId': '', // Se puede actualizar después
+          'fechaSolicitud': tipoUsuario == 'maestro' ? FieldValue.serverTimestamp() : null,
+          'gradoNombre': tipoUsuario == 'alumno' ? gradoNombre : null, // ✨ NUEVO
         });
       }
 
-      _currentUser = userCredential.user;
+      // Si es admin registrando, mantener su sesión
+      if (mantenerSesion && adminEmail != null) {
+        print('✅ Usuario $displayName creado. Sesión de admin mantenida.');
+      } else {
+        // Auto-login solo si es alumno (maestros no pueden entrar hasta ser aprobados)
+        if (tipoUsuario == 'alumno') {
+          _currentUser = userCredential.user;
+          print('✅ Usuario $displayName creado e identificado.');
+        } else {
+          // Maestro registrado, pero no autenticado
+          await _firebaseAuth.signOut();
+          _currentUser = null;
+          print('✅ Solicitud de maestro enviada para aprobación.');
+        }
+      }
+      
       _isLoading = false;
       notifyListeners();
 
@@ -92,7 +123,7 @@ class AuthenticationService extends ChangeNotifier {
   }
 
   /// Inicia sesión con email y contraseña
-  /// Verifica que el usuario esté activo en Firestore
+  /// ✨ MEJORA: Verifica que maestros estén aprobados antes de permitir login
   Future<bool> login({
     required String email,
     required String password,
@@ -116,7 +147,19 @@ class AuthenticationService extends ChangeNotifier {
 
         if (userDoc.exists) {
           final isActivo = userDoc.data()?['activo'] ?? true;
+          final tipoUsuario = userDoc.data()?['tipoUsuario'] as String?;
+          final estaAprobado = userDoc.data()?['aprobado'] ?? true;
           final nombre = userDoc.data()?['nombre'] as String?;
+          
+          // ✨ NUEVA VALIDACIÓN: Maestros deben estar aprobados
+          if (tipoUsuario == 'maestro' && !estaAprobado) {
+            await _firebaseAuth.signOut();
+            _errorMessage = 'Tu registro como maestro está pendiente de aprobación. Por favor, espera a que un administrador valide tu solicitud.';
+            _currentUser = null;
+            _isLoading = false;
+            notifyListeners();
+            return false;
+          }
           
           // Actualizar displayName si existe en Firestore
           if (nombre != null && nombre.isNotEmpty) {

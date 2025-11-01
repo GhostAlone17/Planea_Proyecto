@@ -122,6 +122,70 @@ class AdminService {
     }
   }
 
+  /// ✨ NUEVO: Obtener maestros pendientes de aprobación
+  Future<List<UserModel>> obtenerMaestrosPendientes() async {
+    try {
+      print('🔍 Buscando maestros pendientes...');
+      
+      final snapshot = await _firestore
+          .collection('usuarios')
+          .where('tipoUsuario', isEqualTo: 'maestro')
+          .where('aprobado', isEqualTo: false)
+          .where('activo', isEqualTo: true)
+          .get();
+
+      print('📊 Encontrados ${snapshot.docs.length} maestros pendientes');
+      
+      final maestros = snapshot.docs
+          .map((doc) {
+            // ✨ IMPORTANTE: Incluir el ID del documento en los datos
+            final data = doc.data();
+            data['id'] = doc.id; // Agregar el ID
+            
+            print('👨‍🏫 Maestro: ${data['nombre']} - Email: ${data['email']} - ID: ${doc.id}');
+            return UserModel.fromMap(data);
+          })
+          .toList();
+      
+      return maestros;
+    } catch (e) {
+      print('❌ Error al obtener maestros pendientes: $e');
+      return [];
+    }
+  }
+
+  /// ✨ NUEVO: Aprobar maestro
+  Future<bool> aprobarMaestro(String maestroId) async {
+    try {
+      await _firestore.collection('usuarios').doc(maestroId).update({
+        'aprobado': true,
+        'fechaAprobacion': DateTime.now(),
+      });
+
+      print('✅ Maestro $maestroId aprobado');
+      return true;
+    } catch (e) {
+      print('Error al aprobar maestro: $e');
+      return false;
+    }
+  }
+
+  /// ✨ NUEVO: Rechazar maestro (marcar como inactivo)
+  Future<bool> rechazarMaestro(String maestroId) async {
+    try {
+      await _firestore.collection('usuarios').doc(maestroId).update({
+        'activo': false,
+        'fechaRechazo': DateTime.now(),
+      });
+
+      print('❌ Maestro $maestroId rechazado');
+      return true;
+    } catch (e) {
+      print('Error al rechazar maestro: $e');
+      return false;
+    }
+  }
+
   /// Obtener número total de estudiantes activos
   Future<int> obtenerTotalEstudiantes() async {
     try {
@@ -386,6 +450,17 @@ class AdminService {
             .toList());
   }
 
+  /// Stream de todos los usuarios (estudiantes y maestros) en tiempo real
+  Stream<List<UserModel>> streamUsuarios() {
+    return _firestore
+        .collection('usuarios')
+        .where('tipoUsuario', whereIn: ['alumno', 'maestro'])
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => UserModel.fromMap(doc.data()))
+            .toList());
+  }
+
   /// Stream de reactivos en tiempo real
   Stream<List<ReactiveModel>> streamReactivos({String? categoryId}) {
     Query query = _firestore
@@ -410,4 +485,39 @@ class AdminService {
             .map((doc) => StudentReportModel.fromMap(doc.data()))
             .toList());
   }
+
+  /// ✨ NUEVO: Función de migración para actualizar categorías con el campo 'grado'
+  /// Útil si las categorías existen pero no tienen el campo grado especificado
+  Future<void> migrarCategoriasConGrado() async {
+    try {
+      print('📊 Iniciando migración de categorías...');
+      
+      final snapshot = await _firestore.collection('categorias').get();
+      
+      // Mapeo de categorías a sus grados correspondientes
+      final gradoPorCategoria = {
+        'algebra': 'Primaria',
+        'geometria': 'Primaria',
+        'estadistica': 'Primaria',
+        // Agregar más según sea necesario
+      };
+
+      for (var doc in snapshot.docs) {
+        final id = doc.id;
+        final grado = gradoPorCategoria[id];
+
+        if (grado != null) {
+          await _firestore.collection('categorias').doc(id).update({
+            'grado': grado,
+          });
+          print('✅ Actualizada categoría $id con grado: $grado');
+        }
+      }
+
+      print('✅ Migración completada');
+    } catch (e) {
+      print('❌ Error en migración: $e');
+    }
+  }
 }
+

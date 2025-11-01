@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/student_report_model.dart';
 import '../../models/category_model_v2.dart';
+import '../generar_reportes_screen.dart';
 
 /// Pantalla para ver reportes y estadísticas de estudiantes
 class AdminReportesScreen extends StatefulWidget {
@@ -99,6 +100,13 @@ class _AdminReportesScreenState extends State<AdminReportesScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.file_download),
+            tooltip: 'Generar Reporte',
+            onPressed: () => _mostrarDialogoGradoReporte(),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Padding(
@@ -629,4 +637,42 @@ class _AdminReportesScreenState extends State<AdminReportesScreen> {
     if (percentage >= 40) return Colors.orange;
     return Colors.red;
   }
+
+  /// Muestra un diálogo para seleccionar el grado y generar reporte
+  void _mostrarDialogoGradoReporte() {
+    final grados = ['Primaria', 'Secundaria', 'Preparatoria'];
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Selecciona Grado'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('¿Para qué grado deseas generar el reporte?'),
+            const SizedBox(height: 16),
+            ...grados.map((grado) => ListTile(
+              title: Text(grado),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => GenararReportesScreen(gradoNombre: grado),
+                  ),
+                );
+              },
+            )).toList(),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+  }
 }
+

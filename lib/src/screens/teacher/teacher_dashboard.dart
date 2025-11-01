@@ -1,29 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'admin_estudiantes_screen.dart';
-import 'admin_reactivos_screen.dart';
-import 'admin_categorias_screen.dart';
-import 'admin_reportes_screen.dart';
-import 'admin_maestros_validation_screen.dart';
+import '../../services/authentication_service.dart';
 import '../user_profile_modal.dart';
 import '../cambiar_password_screen.dart';
-import '../../services/authentication_service.dart';
 
-/// Dashboard Principal para Admin
-/// Pantalla de inicio con opciones para gestionar:
-/// - Estudiantes
-/// - Reactivos (preguntas)
-/// - Categorías
-/// - Reportes
-/// - Validación de maestros
-class AdminDashboard extends StatefulWidget {
-  const AdminDashboard({Key? key}) : super(key: key);
+/// Dashboard para Maestros
+/// Permite ver reportes del desempeño de sus estudiantes
+class TeacherDashboard extends StatefulWidget {
+  const TeacherDashboard({Key? key}) : super(key: key);
 
   @override
-  State<AdminDashboard> createState() => _AdminDashboardState();
+  State<TeacherDashboard> createState() => _TeacherDashboardState();
 }
 
-class _AdminDashboardState extends State<AdminDashboard> {
+class _TeacherDashboardState extends State<TeacherDashboard> {
+  @override
+  void initState() {
+    super.initState();
+  }
+
   void _logout() {
     showDialog(
       context: context,
@@ -65,7 +60,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Panel Administrativo',
+              'Panel de Maestro',
               style: TextStyle(fontSize: isMobile ? 16 : 18),
             ),
             Text(
@@ -78,6 +73,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ],
         ),
         elevation: 0,
+        backgroundColor: Colors.orange.shade600,
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) {
@@ -102,7 +98,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 value: 'profile',
                 child: Row(
                   children: [
-                    Icon(Icons.person, color: Colors.green, size: 20),
+                    Icon(Icons.person, color: Colors.orange, size: 20),
                     SizedBox(width: 12),
                     Text('Mi Perfil'),
                   ],
@@ -147,7 +143,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Colors.green.shade400, Colors.green.shade600],
+                  colors: [Colors.orange.shade400, Colors.orange.shade600],
                 ),
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -155,7 +151,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    '👋 ¡Bienvenido Admin!',
+                    '👋 ¡Bienvenido!',
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -164,7 +160,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Gestiona estudiantes, maestros y exámenes',
+                    'Monitorea el desempeño de tus estudiantes',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.white.withOpacity(0.9),
@@ -177,73 +173,56 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
             // Opciones del dashboard
             Text(
-              'Gestión del Sistema',
+              'Reportes y Monitoreo',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 16),
 
-            // Card: Estudiantes
-            _buildAdminCard(
-              icon: Icons.people,
-              title: '👥 Usuarios',
-              description: 'Gestionar padrón de estudiantes y calificaciones',
+            // Card: Desempeño de Estudiantes
+            _buildTeacherCard(
+              icon: Icons.trending_up,
+              title: '📊 Desempeño de Estudiantes',
+              description: 'Ver progreso y calificaciones de tus alumnos',
               color: Colors.blue,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AdminEstudiantesScreen()),
-              ),
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Esta funcionalidad estará disponible pronto'),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 16),
 
-            // Card: Reactivos
-            _buildAdminCard(
-              icon: Icons.quiz,
-              title: '❓ Reactivos',
-              description: 'Crear y editar preguntas del examen',
-              color: Colors.orange,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AdminReactivosScreen()),
-              ),
+            // Card: Reportes por Categoría
+            _buildTeacherCard(
+              icon: Icons.assessment,
+              title: '📈 Reportes por Categoría',
+              description: 'Análisis de desempeño en Álgebra, Geometría, etc.',
+              color: Colors.green,
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Esta funcionalidad estará disponible pronto'),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 16),
 
-            // Card: Categorías
-            _buildAdminCard(
-              icon: Icons.category,
-              title: '📂 Categorías',
-              description: 'Gestionar temas: Álgebra, Geometría, etc.',
-              color: Colors.purple,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AdminCategoriasScreen()),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Card: Reportes
-            _buildAdminCard(
+            // Card: Estadísticas Generales
+            _buildTeacherCard(
               icon: Icons.bar_chart,
-              title: '📊 Reportes',
-              description: 'Ver desempeño y estadísticas de estudiantes',
-              color: Colors.teal,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AdminReportesScreen()),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Card: Validar Maestros
-            _buildAdminCard(
-              icon: Icons.verified_user,
-              title: '✨ Validar Maestros',
-              description: 'Aprobar solicitudes de nuevos maestros',
-              color: Colors.red,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AdminMaestrosValidationScreen()),
-              ),
+              title: '📉 Estadísticas Generales',
+              description: 'Resumen del desempeño del grupo',
+              color: Colors.purple,
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Esta funcionalidad estará disponible pronto'),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 32),
 
@@ -261,7 +240,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Todos los cambios se guardan automáticamente en Firestore.',
+                      'Los reportes se actualizan en tiempo real con las respuestas de los estudiantes.',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.blue.shade700,
@@ -278,7 +257,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   /// Construye una tarjeta de opción para el dashboard
-  Widget _buildAdminCard({
+  Widget _buildTeacherCard({
     required IconData icon,
     required String title,
     required String description,
