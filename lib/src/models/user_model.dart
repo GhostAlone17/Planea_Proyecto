@@ -13,6 +13,9 @@ class UserModel {
   /// Tipo de usuario: 'alumno', 'padre', 'docente'
   final String tipoUsuario;
   
+  /// Lista de roles del usuario: ['estudiante', 'profesor', 'admin']
+  final List<String> roles;
+  
   /// URL de la foto de perfil (opcional)
   final String? fotoPerfil;
   
@@ -37,6 +40,7 @@ class UserModel {
     required this.nombre,
     required this.email,
     required this.tipoUsuario,
+    this.roles = const [],
     this.fotoPerfil,
     this.tokenNotificacion,
     required this.fechaRegistro,
@@ -52,6 +56,7 @@ class UserModel {
       'nombre': nombre,
       'email': email,
       'tipoUsuario': tipoUsuario,
+      'roles': roles,
       'fotoPerfil': fotoPerfil,
       'tokenNotificacion': tokenNotificacion,
       'fechaRegistro': fechaRegistro.toIso8601String(),
@@ -68,6 +73,9 @@ class UserModel {
       nombre: map['nombre'] ?? '',
       email: map['email'] ?? '',
       tipoUsuario: map['tipoUsuario'] ?? '',
+      roles: map['roles'] != null 
+          ? List<String>.from(map['roles']) 
+          : [],
       fotoPerfil: map['fotoPerfil'],
       tokenNotificacion: map['tokenNotificacion'],
       fechaRegistro: DateTime.parse(map['fechaRegistro']),
@@ -85,6 +93,7 @@ class UserModel {
     String? nombre,
     String? email,
     String? tipoUsuario,
+    List<String>? roles,
     String? fotoPerfil,
     String? tokenNotificacion,
     DateTime? fechaRegistro,
@@ -97,6 +106,7 @@ class UserModel {
       nombre: nombre ?? this.nombre,
       email: email ?? this.email,
       tipoUsuario: tipoUsuario ?? this.tipoUsuario,
+      roles: roles ?? this.roles,
       fotoPerfil: fotoPerfil ?? this.fotoPerfil,
       tokenNotificacion: tokenNotificacion ?? this.tokenNotificacion,
       fechaRegistro: fechaRegistro ?? this.fechaRegistro,
@@ -105,4 +115,16 @@ class UserModel {
       gradoId: gradoId ?? this.gradoId,
     );
   }
+  
+  /// Verifica si el usuario tiene un rol específico
+  bool tieneRol(String rol) => roles.contains(rol);
+  
+  /// Verifica si es administrador
+  bool get esAdmin => tieneRol('admin');
+  
+  /// Verifica si es profesor
+  bool get esProfesor => tieneRol('profesor');
+  
+  /// Verifica si es estudiante
+  bool get esEstudiante => tieneRol('estudiante');
 }

@@ -4,6 +4,7 @@ import '../services/quiz_service.dart';
 import '../services/auth_service.dart';
 import '../models/category_model.dart';
 import 'quiz_screen.dart';
+import 'user_profile_modal.dart';
 
 /// Pantalla que muestra las categorías disponibles del test PLANEA
 class CategoriesScreen extends StatefulWidget {
@@ -25,8 +26,30 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   void _logout() {
-    AuthService().logout();
-    widget.onLogout?.call();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cerrar sesión'),
+        content: const Text('¿Estás seguro de que deseas cerrar tu sesión?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              AuthService().logout();
+              widget.onLogout?.call();
+            },
+            child: const Text(
+              'Cerrar sesión',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -35,10 +58,44 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       appBar: AppBar(
         title: const Text('PLANEA - Matemáticas'),
         actions: [
-          IconButton(
-            onPressed: _logout,
-            icon: const Icon(Icons.logout),
-            tooltip: 'Cerrar sesión',
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'profile') {
+                showDialog(
+                  context: context,
+                  builder: (_) => const UserProfileModal(),
+                );
+              } else if (value == 'logout') {
+                _logout();
+              }
+            },
+            itemBuilder: (BuildContext context) => [
+              const PopupMenuItem<String>(
+                value: 'profile',
+                child: Row(
+                  children: [
+                    Icon(Icons.person, color: Colors.green, size: 20),
+                    SizedBox(width: 12),
+                    Text('Mi Perfil'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem<String>(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, color: Colors.red, size: 20),
+                    SizedBox(width: 12),
+                    Text('Cerrar sesión'),
+                  ],
+                ),
+              ),
+            ],
+            child: const Padding(
+              padding: EdgeInsets.all(8),
+              child: Icon(Icons.account_circle),
+            ),
           )
         ],
       ),

@@ -3,54 +3,121 @@ import 'src/config/app_theme.dart';
 import 'src/config/app_constants.dart';
 import 'src/screens/login_screen.dart';
 import 'src/screens/categories_screen.dart';
-import 'src/services/auth_service.dart';
+import 'src/screens/admin/admin_dashboard.dart';
+import 'src/services/firebase_service.dart';
+import 'src/services/service_providers.dart';
+import 'package:provider/provider.dart';
+import 'src/services/authentication_service.dart';
+import 'src/services/firestore_service.dart';
 
 /// Punto de entrada principal de la aplicación
-/// Inicializa la app del Plantel
-void main() {
+/// Inicializa Firebase y la estructura de la app
+void main() async {
+  // Asegurar que Flutter está inicializado
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Inicializar Firebase
+  try {
+    await FirebaseService().initialize();
+  } catch (e) {
+    debugPrint('❌ Error inicializando Firebase: $e');
+    debugPrint('💡 Asegúrate de ejecutar: flutterfire configure --project=planea-proyecto');
+  }
+
   runApp(const PlantelApp());
 }
 
 /// Widget raíz de la aplicación
-/// Configura el tema y la navegación inicial
-class PlantelApp extends StatefulWidget {
+/// Configura el tema, providers y la navegación inicial
+class PlantelApp extends StatelessWidget {
   const PlantelApp({super.key});
 
-  @override
-  State<PlantelApp> createState() => _PlantelAppState();
-}
+  /// Verifica si el usuario actual es un administrador
+  Future<bool> _verificarSiEsAdmin(AuthenticationService authService) async {
+    try {
+      final userId = authService.currentUser?.uid;
+      if (userId == null) return false;
 
-class _PlantelAppState extends State<PlantelApp> {
-  final AuthService _authService = AuthService();
+      final firestoreService = FirestoreService();
+      final userData = await firestoreService.getDocument(
+        collection: 'usuarios',
+        docId: userId,
+      );
 
-  void _handleLogin() {
-    setState(() {});
-  }
+      if (userData != null) {
+        return userData['tipoUsuario'] == 'admin' ||
+            userData['tipoUsuario'] == 'docente';
+      }
 
-  void _handleLogout() {
-    setState(() {});
+      return false;
+    } catch (e) {
+      debugPrint('Error verificando si es admin: $e');
+      return false;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      // ============ CONFIGURACIÓN GENERAL ============
-      
-      /// Título de la aplicación
-      title: AppConstants.appName,
-      
-      /// Desactiva el banner de debug
-      debugShowCheckedModeBanner: false,
-      
-      /// Tema de la aplicación
-      theme: AppTheme.lightTheme,
-      
-      // ============ PANTALLA INICIAL ============
-      
-    /// Página inicial de la aplicación
-    home: _authService.currentUser == null
-      ? LoginScreen(onLogin: _handleLogin)
-      : CategoriesScreen(onLogout: _handleLogout),
+    return ServiceProviders.wrap(
+      MaterialApp(
+        // ============ CONFIGURACIÓN GENERAL ============
+
+        /// Título de la aplicación
+        title: AppConstants.appName,
+
+        /// Desactiva el banner de debug
+        debugShowCheckedModeBanner: false,
+
+        /// Tema de la aplicación
+        theme: AppTheme.lightTheme,
+
+        // ============ PANTALLA INICIAL ============
+
+        /// Página inicial de la aplicación
+        home: Consumer<AuthenticationService>(
+          builder: (context, authService, _) {
+            if (authService.isLoading) {
+              return Scaffold(
+                appBar: AppBar(title: const Text(AppConstants.appName)),
+                body: const Center(child: CircularProgressIndicator()),
+              );
+            }
+
+            if (authService.isAuthenticated) {
+              // Verificar si es admin
+              return FutureBuilder<bool>(
+                future: _verificarSiEsAdmin(authService),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Scaffold(
+                      appBar: AppBar(
+                          title: const Text(AppConstants.appName)),
+                      body: const Center(
+                          child: CircularProgressIndicator()),
+                    );
+                  }
+
+                  final esAdmin = snapshot.data ?? false;
+
+                  return esAdmin
+                      ? AdminDashboard()
+                      : CategoriesScreen(
+                          onLogout: () {
+                            authService.logout();
+                          },
+                        );
+                },
+              );
+            }
+
+            return LoginScreen(
+              onLogin: () {
+                // El estado se actualiza automáticamente
+              },
+            );
+          },
+        ),
+      ),
     );
   }
 }
@@ -72,7 +139,7 @@ class HomeTemporalScreen extends StatelessWidget {
             icon: const Icon(Icons.logout),
             tooltip: 'Cerrar sesión',
             onPressed: () {
-              AuthService().logout();
+              context.read<AuthenticationService>().logout();
               onLogout?.call();
             },
           ),

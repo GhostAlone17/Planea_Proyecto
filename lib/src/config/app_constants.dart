@@ -168,4 +168,82 @@ class AppConstants {
   
   /// Número de elementos por página en listas
   static const int elementosPorPagina = 20;
+
+  // ============ CONSTANTES PLANEA ============
+  
+  /// Grados permitidos para PLANEA
+  /// Primaria: 4° y 6°
+  /// Secundaria: 3°
+  /// Media Superior: Último año
+  static const Map<String, List<Map<String, String>>> GRADOS_PLANEA = {
+    'Primaria': [
+      {'valor': '4P', 'label': '4° Primaria', 'emoji': '📚'},
+      {'valor': '6P', 'label': '6° Primaria', 'emoji': '📚'},
+    ],
+    'Secundaria': [
+      {'valor': '3S', 'label': '3° Secundaria', 'emoji': '🎓'},
+    ],
+    'Educación Media Superior': [
+      {'valor': '12EMS', 'label': '3° de Preparatoria', 'emoji': '👨‍🎓'},
+    ],
+  };
+
+  /// Obtener lista plana de todos los grados PLANEA
+  static List<Map<String, String>> obtenerTodosGrados() {
+    final list = <Map<String, String>>[];
+    GRADOS_PLANEA.forEach((key, grados) {
+      list.addAll(grados);
+    });
+    return list;
+  }
+
+  /// Dificultades de reactivos PLANEA
+  static const Map<String, String> DIFICULTADES = {
+    '1': '🟢 Fácil',
+    '2': '🟡 Medio',
+    '3': '🔴 Difícil',
+  };
+
+  /// Categorías PLANEA - Matemáticas
+  static const List<String> CATEGORIAS_PLANEA = [
+    'Aritmética',
+    'Álgebra',
+    'Geometría',
+    'Trigonometría',
+    'Estadística',
+    'Cálculo',
+  ];
+
+  /// Mapeo de categorías a IDs
+  static const Map<String, String> CATEGORIAS_IDS = {
+    'Aritmética': 'aritmetica',
+    'Álgebra': 'algebra',
+    'Geometría': 'geometria',
+    'Trigonometría': 'trigonometria',
+    'Estadística': 'estadistica',
+    'Cálculo': 'calculo',
+  };
+
+  /// Descripción de niveles de dificultad
+  static const Map<String, String> DIFICULTAD_DESCRIPCION = {
+    '1': 'Fácil - Conceptos básicos y ejercicios simples',
+    '2': 'Medio - Requiere comprensión y análisis',
+    '3': 'Difícil - Requiere razonamiento avanzado',
+  };
+
+  /// Traduce tipo de usuario a etiqueta legible
+  static String traducirTipoUsuario(String tipoUsuario) {
+    switch (tipoUsuario) {
+      case 'alumno':
+        return 'Alumno';
+      case 'padre':
+        return 'Padre de Familia';
+      case 'docente':
+        return 'Docente';
+      case 'admin':
+        return 'Administrador';
+      default:
+        return tipoUsuario;
+    }
+  }
 }

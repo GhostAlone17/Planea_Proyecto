@@ -31,26 +31,49 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
+  # ============ UI Y DISEÑO ============
   cupertino_icons: ^1.0.8
   
-  # Paquete para formatear fechas en español
+  # ============ INTERNACIONALIZACIÓN ============
   intl: ^0.19.0
   
-  # Almacenamiento local simple para progreso del test
+  # ============ ALMACENAMIENTO LOCAL ============
   shared_preferences: ^2.3.2
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  
+  # ============ FIREBASE ============
+  firebase_core: ^2.24.0
+  firebase_auth: ^4.17.0
+  cloud_firestore: ^4.13.0
+  firebase_storage: ^11.6.0
+  firebase_messaging: ^14.7.0
+  firebase_database: ^10.3.0
+  
+  # ============ GESTIÓN DE ESTADO ============
+  provider: ^6.1.0
+  
+  # ============ ENRUTAMIENTO Y NAVEGACIÓN ============
+  go_router: ^13.2.0
+  
+  # ============ HTTP Y NETWORKING ============
+  http: ^1.1.0
+  
+  # ============ SERIALIZACIÓN ============
+  json_serializable: ^6.7.0
+  
+  # ============ UTILIDADES ============
+  logger: ^2.1.0
+  connectivity_plus: ^5.0.0
+  device_info_plus: ^9.1.0
+  image_picker: ^1.1.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
   flutter_lints: ^5.0.0
+  build_runner: ^2.4.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
