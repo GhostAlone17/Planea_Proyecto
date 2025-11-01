@@ -23,6 +23,7 @@ class QuizService {
   // ===================== API PÚBLICA =====================
 
   /// Devuelve las categorías disponibles desde Firestore
+  /// Filtra solo las categorías que tienen al menos una pregunta
   Future<List<CategoryModel>> getCategories() async {
     try {
       final snapshot = await _firestore
@@ -35,17 +36,54 @@ class QuizService {
         return _crearCategoriasDefault();
       }
 
-      return snapshot.docs
+      // Obtener todos los categoryIds disponibles en reactivos
+      final reactivosSnapshot = await _firestore
+          .collection('reactivos')
+          .where('activa', isEqualTo: true)
+          .get();
+      
+      final availableCategoryIds = <String>{};
+      for (var doc in reactivosSnapshot.docs) {
+        final catId = doc['categoryId'];
+        if (catId != null) {
+          // Normalizar a minúsculas para comparación
+          availableCategoryIds.add(catId.toString().toLowerCase());
+        }
+      }
+
+      print('✅ Categorías con reactivos activos: $availableCategoryIds');
+
+      // Retornar solo las categorías que tienen preguntas
+      final filteredCategories = snapshot.docs
+          .where((doc) {
+            final data = doc.data();
+            final id = data['id'] is String 
+                ? data['id'] 
+                : (data['id']?.toString() ?? doc.id);
+            // Comparar en minúsculas
+            return availableCategoryIds.contains(id.toLowerCase());
+          })
           .map((doc) {
             final data = doc.data();
+            // Asegurar que id sea un String
+            final id = data['id'] is String 
+                ? data['id'] 
+                : (data['id']?.toString() ?? doc.id);
+            
             return CategoryModel(
-              id: data['id'] ?? doc.id,
+              id: id,
               nombre: data['nombre'] ?? 'Sin nombre',
               descripcion: data['descripcion'],
               grado: data['grado'],
             );
           })
           .toList();
+
+      if (filteredCategories.isEmpty) {
+        print('⚠️ No hay categorías con reactivos activos');
+      }
+
+      return filteredCategories;
     } catch (e) {
       print('❌ Error obteniendo categorías: $e');
       return _crearCategoriasDefault();
@@ -53,6 +91,7 @@ class QuizService {
   }
 
   /// ✨ NUEVO: Obtiene categorías filtradas por grado del estudiante
+  /// Solo retorna categorías que tienen preguntas activas
   Future<List<CategoryModel>> getCategoriesByGrade(String gradoNombre) async {
     try {
       // Obtener todas las categorías sin filtro en Firestore
@@ -64,36 +103,78 @@ class QuizService {
       print('📚 Total de categorías en Firestore: ${snapshot.docs.length}');
       print('🔍 Buscando categorías para grado: $gradoNombre');
 
+      // Obtener todos los categoryIds disponibles en reactivos
+      final reactivosSnapshot = await _firestore
+          .collection('reactivos')
+          .where('activa', isEqualTo: true)
+          .get();
+      
+      final availableCategoryIds = <String>{};
+      for (var doc in reactivosSnapshot.docs) {
+        final catId = doc['categoryId'];
+        if (catId != null) {
+          availableCategoryIds.add(catId.toString());
+        }
+      }
+
+      print('✅ Categorías con reactivos activos: $availableCategoryIds');
+
       // Mostrar qué hay en cada documento
       for (var doc in snapshot.docs) {
         final data = doc.data();
-        print('   - ${data['nombre'] ?? doc.id}: grado=${data['grado'] ?? "NO ESPECIFICADO"}');
+        final id = data['id'];
+        final hasReactivos = availableCategoryIds.contains(id);
+        print('   - ${data['nombre'] ?? doc.id}: grado=${data['grado'] ?? "NO ESPECIFICADO"}, tiene reactivos=$hasReactivos');
       }
 
-      // Filtrar en código aquellas que tengan el grado especificado
+      // Filtrar categorías por: grado Y que tengan preguntas
       final categorias = snapshot.docs
+          .where((doc) {
+            final data = doc.data();
+            final id = data['id'] is String 
+                ? data['id'] 
+                : (data['id']?.toString() ?? doc.id);
+            final grado = data['grado'];
+            
+            // Incluir si: tiene grado especificado Y tiene preguntas
+            return grado == gradoNombre && availableCategoryIds.contains(id);
+          })
           .map((doc) {
             final data = doc.data();
+            final id = data['id'] is String 
+                ? data['id'] 
+                : (data['id']?.toString() ?? doc.id);
+            
             return CategoryModel(
-              id: data['id'] ?? doc.id,
+              id: id,
               nombre: data['nombre'] ?? 'Sin nombre',
               descripcion: data['descripcion'],
-              grado: data['grado'], // Puede ser null
+              grado: data['grado'],
             );
           })
-          .where((cat) => cat.grado == gradoNombre)
           .toList();
 
-      print('✅ Categorías filtradas para $gradoNombre: ${categorias.length}');
+      print('✅ Categorías filtradas para $gradoNombre con reactivos: ${categorias.length}');
 
-      // Si no hay categorías con ese grado, retornar todas
+      // Si no hay categorías con ese grado, retornar todas las que tengan preguntas
       if (categorias.isEmpty) {
-        print('⚠️ No hay categorías específicas para el grado: $gradoNombre. Mostrando todas.');
+        print('⚠️ No hay categorías específicas para el grado: $gradoNombre. Mostrando todas con preguntas.');
         return snapshot.docs
+            .where((doc) {
+              final data = doc.data();
+              final id = data['id'] is String 
+                  ? data['id'] 
+                  : (data['id']?.toString() ?? doc.id);
+              return availableCategoryIds.contains(id);
+            })
             .map((doc) {
               final data = doc.data();
+              final id = data['id'] is String 
+                  ? data['id'] 
+                  : (data['id']?.toString() ?? doc.id);
+              
               return CategoryModel(
-                id: data['id'] ?? doc.id,
+                id: id,
                 nombre: data['nombre'] ?? 'Sin nombre',
                 descripcion: data['descripcion'],
                 grado: data['grado'],
@@ -116,6 +197,9 @@ class QuizService {
       CategoryModel(id: 'algebra', nombre: 'Álgebra'),
       CategoryModel(id: 'geometria', nombre: 'Geometría'),
       CategoryModel(id: 'estadistica', nombre: 'Estadística'),
+      CategoryModel(id: 'trigonometria', nombre: 'Trigonometría'),
+      CategoryModel(id: 'calculo', nombre: 'Cálculo'),
+      CategoryModel(id: 'logica-matematica', nombre: 'Lógica Matemática'),
     ];
 
     try {
@@ -137,28 +221,55 @@ class QuizService {
   /// Obtiene todas las preguntas de una categoría desde Firestore
   Future<List<QuestionModel>> getQuestionsFromFirestore(String categoryId) async {
     try {
+      // Asegurar que categoryId sea un String válido
+      if (categoryId.isEmpty) {
+        print('❌ categoryId vacío');
+        return [];
+      }
+
+      print('🔍 Buscando preguntas para categoryId: "$categoryId"');
+
+      // Búsqueda directa: obtener preguntas activas para esta categoría
       final snapshot = await _firestore
           .collection('reactivos')
           .where('categoryId', isEqualTo: categoryId)
           .where('activa', isEqualTo: true)
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+            print('⏱️ TIMEOUT en Firestore.get()');
+            throw Exception('Firestore timeout al obtener reactivos');
+          });
 
+      print('📝 Preguntas encontradas (activa=true): ${snapshot.docs.length}');
+
+      // Si no hay preguntas, retornar vacío
       if (snapshot.docs.isEmpty) {
-        print('⚠️ No hay preguntas para la categoría: $categoryId');
+        print('⚠️ No hay preguntas activas para la categoría: "$categoryId"');
         return [];
       }
 
-      return snapshot.docs
-          .map((doc) => QuestionModel(
-                id: doc['id'],
-                categoryId: doc['categoryId'],
-                pregunta: doc['pregunta'],
-                opciones: List<String>.from(doc['opciones']),
-                indiceCorrecto: doc['respuestaCorrecta'] ?? doc['indiceCorrecto'],
-                explicacion: doc['explicacion'],
-                dificultad: doc['dificultad'],
-              ))
+      final questions = snapshot.docs
+          .map((doc) {
+            final data = doc.data();
+            // Asegurar que categoryId sea un String
+            final catId = data['categoryId'] is String 
+                ? data['categoryId'] 
+                : data['categoryId'].toString();
+            
+            return QuestionModel(
+              id: doc['id'] as String? ?? '',
+              categoryId: catId,
+              pregunta: data['pregunta'] as String? ?? '',
+              opciones: List<String>.from(data['opciones'] ?? []),
+              indiceCorrecto: data['respuestaCorrecta'] as int? ?? data['indiceCorrecto'] as int? ?? 0,
+              explicacion: data['explicacion'],
+              dificultad: data['dificultad'],
+            );
+          })
           .toList();
+      
+      print('✅ ${questions.length} preguntas mapeadas correctamente');
+      return questions;
     } catch (e) {
       print('❌ Error obteniendo preguntas: $e');
       return [];
@@ -187,7 +298,25 @@ class QuizService {
       // Obtener preguntas de Firestore
       final questions = await getQuestionsFromFirestore(categoryId);
       if (questions.isEmpty) {
-        throw Exception('No hay preguntas disponibles para esta categoría');
+        print('❌ DEBUG: Verificando preguntas para categoryId="$categoryId"');
+        // Buscar cualquier pregunta con este categoryId para debug
+        final allReactivos = await _firestore.collection('reactivos').get();
+        print('📊 Total de reactivos en Firestore: ${allReactivos.docs.length}');
+        print('🔍 Categorías encontradas en reactivos:');
+        final categoriesInReactivos = <String>{};
+        for (var doc in allReactivos.docs) {
+          final catId = doc['categoryId'];
+          if (catId != null) {
+            categoriesInReactivos.add(catId.toString());
+          }
+        }
+        for (var cat in categoriesInReactivos) {
+          print('   - "$cat"');
+        }
+        throw Exception(
+          'No hay preguntas disponibles para esta categoría. '
+          'Por favor, contacta al administrador.'
+        );
       }
 
       // ✨ NUEVA LÓGICA: Generar seed determinístico
@@ -208,17 +337,72 @@ class QuizService {
       // Generar ID de sesión único
       final sessionId = _firestore.collection('dummy').doc().id;
 
-      // Guardar orden localmente
-      await prefs.setStringList(_keyOrder(categoryId), order.map((e) => e.toString()).toList());
-      await prefs.setInt(_keyIndex(categoryId), 0);
-      await prefs.setStringList(_keyAnswers(categoryId), List.filled(questions.length, '').toList());
-      await prefs.setString(_keySessionId(categoryId), sessionId);
+      // Guardar orden localmente CON VALIDACIÓN
+      print('💾 Guardando quiz en local para categoryId=$categoryId, ${questions.length} preguntas');
+      final orderList = order.map((e) => e.toString()).toList();
+      print('   Intentando guardar orden: $orderList');
+      
+      try {
+        // IMPORTANTE: En SharedPreferences el método es síncrono pero retorna Future
+        final ordenGuardado = await prefs.setStringList(_keyOrder(categoryId), orderList);
+        print('   setStringList resultado: $ordenGuardado');
+        
+        if (!ordenGuardado) {
+          print('   ⚠️ ADVERTENCIA: setStringList retornó false (posiblemente por permisos o limitaciones)');
+          print('   📌 Continuando de todas formas...');
+        }
+      } catch (e) {
+        print('   ❌ Error CRÍTICO en setStringList: $e');
+        print('   📌 Continuando de todas formas (fallback a Firestore)...');
+      }
+      
+      // Verificar que se guardó correctamente (lectura síncrona)
+      final ordenVerificacion = prefs.getStringList(_keyOrder(categoryId));
+      print('   📋 Verificación immediata: orden en prefs = $ordenVerificacion');
+      
+      if (ordenVerificacion == null || ordenVerificacion.isEmpty) {
+        print('   ⚠️ ADVERTENCIA: No se guardó el orden localmente!');
+        print('   📌 Se usará Firestore como fuente de verdad');
+      } else {
+        print('✅ Orden guardado localmente correctamente');
+      }
+      
+      try {
+        final indexGuardado = await prefs.setInt(_keyIndex(categoryId), 0);
+        final answersGuardado = await prefs.setStringList(_keyAnswers(categoryId), List.filled(questions.length, '').toList());
+        final sessionGuardado = await prefs.setString(_keySessionId(categoryId), sessionId);
+        print('   Index: $indexGuardado, Answers: $answersGuardado, SessionId: $sessionGuardado');
+        
+        if (!indexGuardado || !answersGuardado || !sessionGuardado) {
+          print('   ⚠️ ADVERTENCIA: Algunos datos no se guardaron en SharedPreferences');
+        } else {
+          print('✅ Index, answers, sessionId guardados correctamente');
+        }
+      } catch (e) {
+        print('   ❌ Error guardando otros datos: $e');
+      }
       
       // ✨ NUEVA LÓGICA: Guardar seed y optionOrders localmente
-      await prefs.setInt(_keyRandomSeed(categoryId), randomSeed);
-      await prefs.setString(_keyOptionOrders(categoryId), _encodeOptionOrders(optionOrders));
+      try {
+        final seedGuardado = await prefs.setInt(_keyRandomSeed(categoryId), randomSeed);
+        final optionsGuardado = await prefs.setString(_keyOptionOrders(categoryId), _encodeOptionOrders(optionOrders));
+        print('   Seed: $seedGuardado, OptionOrders: $optionsGuardado');
+        
+        if (!seedGuardado || !optionsGuardado) {
+          print('   ⚠️ ADVERTENCIA: Seed/OptionOrders no se guardaron correctamente');
+        } else {
+          print('✅ RandomSeed y optionOrders guardados correctamente');
+        }
+      } catch (e) {
+        print('   ❌ Error guardando seed/options: $e');
+      }
+      
+      print('📌 NOTA: Se guardará sesión en Firestore como respaldo (fuente de verdad)');
 
       // Crear sesión en Firestore CON REINTENTOS
+      // Convertir optionOrders a Map<String, dynamic> para Firestore
+      final optionOrdersForFirestore = optionOrders.map((k, v) => MapEntry(k.toString(), v));
+      
       await _executeWithRetry(
         operation: () => _firestore
             .collection('quizSessions')
@@ -238,7 +422,7 @@ class QuizService {
               'score': null,
               'answers': {},
               'randomSeed': randomSeed,
-              'optionOrders': optionOrders,
+              'optionOrders': optionOrdersForFirestore,
               'lastSyncTime': FieldValue.serverTimestamp(),
               'syncVersion': 1,
             }),
@@ -360,16 +544,46 @@ class QuizService {
   /// Obtiene la pregunta actual
   Future<QuestionModel?> getCurrentQuestion(QuizProgressModel progress) async {
     try {
+      print('📋 DEBUG getCurrentQuestion START');
+      print('   categoryId="${progress.categoryId}", currentIndex=${progress.currentIndex}');
+      
       final order = await _getOrder(progress.categoryId);
-      if (order == null || progress.currentIndex >= order.length) return null;
+      print('   Order guardado: $order');
+      
+      if (order == null) {
+        print('❌ No hay orden guardado en local. Probablemente el quiz no se guardó correctamente.');
+        print('   Devolviendo null para que se maneje en la UI');
+        return null;
+      }
+      
+      if (progress.currentIndex >= order.length) {
+        print('❌ currentIndex (${progress.currentIndex}) >= orden.length (${order.length})');
+        return null;
+      }
 
+      print('📝 Cargando preguntas...');
       final questions = await getQuestionsFromFirestore(progress.categoryId);
-      if (questions.isEmpty) return null;
+      print('   Preguntas cargadas: ${questions.length}');
+      
+      if (questions.isEmpty) {
+        print('❌ No hay preguntas para la categoría');
+        return null;
+      }
 
       final qIndex = order[progress.currentIndex];
-      if (qIndex >= questions.length) return null;
+      print('   qIndex de orden: $qIndex');
+      
+      if (qIndex >= questions.length) {
+        print('❌ qIndex ($qIndex) >= questions.length (${questions.length})');
+        return null;
+      }
 
-      return questions[qIndex];
+      final question = questions[qIndex];
+      final preguntaPreview = question.pregunta.length > 50 
+          ? question.pregunta.substring(0, 50) + '...'
+          : question.pregunta;
+      print('✅ Pregunta cargada: "$preguntaPreview"');
+      return question;
     } catch (e) {
       print('❌ Error obteniendo pregunta actual: $e');
       return null;
@@ -384,13 +598,73 @@ class QuizService {
       final prefs = await SharedPreferences.getInstance();
       final optionOrdersJson = prefs.getString(_keyOptionOrders(progress.categoryId));
       
-      if (optionOrdersJson == null) {
-        // Si no existe, retornar orden por defecto
+      if (optionOrdersJson != null) {
+        // Encontrado en SharedPreferences
+        final optionOrders = _decodeOptionOrders(optionOrdersJson);
+        final order = optionOrders[progress.currentIndex] ?? [0, 1, 2, 3];
+        print('   ✅ Orden de opciones cargada de SharedPreferences para índice ${progress.currentIndex}: $order');
+        return order;
+      }
+      
+      // Fallback: intenta cargar de Firestore
+      print('   ⚠️ Orden de opciones NO encontrada en SharedPreferences, intentando Firestore...');
+      
+      try {
+        final userId = _auth.currentUser?.uid;
+        if (userId == null) {
+          print('   ❌ Usuario no autenticado para fallback a Firestore');
+          return [0, 1, 2, 3];
+        }
+        
+        // Buscar sesión en progreso para esta categoría
+        final snapshot = await _firestore
+            .collection('quizSessions')
+            .doc(userId)
+            .collection('sessions')
+            .where('categoryId', isEqualTo: progress.categoryId)
+            .where('status', isEqualTo: 'en_progreso')
+            .limit(1)
+            .get()
+            .timeout(const Duration(seconds: 5));
+        
+        if (snapshot.docs.isEmpty) {
+          print('   ℹ️ No hay sesión en Firestore, usando orden por defecto');
+          return [0, 1, 2, 3];
+        }
+        
+        final sessionData = snapshot.docs.first.data();
+        final optionOrdersMap = (sessionData['optionOrders'] as Map?)
+            ?.cast<String, dynamic>();
+        
+        if (optionOrdersMap == null) {
+          print('   ℹ️ Sesión no tiene optionOrders, usando orden por defecto');
+          return [0, 1, 2, 3];
+        }
+        
+        final currentIndexStr = progress.currentIndex.toString();
+        final optionOrder = (optionOrdersMap[currentIndexStr] as List?)
+            ?.cast<int>() ?? [0, 1, 2, 3];
+        
+        print('   ✅ Orden de opciones cargada de Firestore para índice ${progress.currentIndex}: $optionOrder');
+        
+        // Guardar en SharedPreferences para la próxima vez
+        try {
+          final optionOrdersJson = _encodeOptionOrders(
+            Map.from(optionOrdersMap.map(
+              (k, v) => MapEntry(int.parse(k), (v as List).cast<int>()),
+            )),
+          );
+          await prefs.setString(_keyOptionOrders(progress.categoryId), optionOrdersJson);
+          print('   ✅ Orden de opciones sincronizada a SharedPreferences');
+        } catch (e) {
+          print('   ⚠️ No se pudo guardar orden de opciones en SharedPreferences: $e');
+        }
+        
+        return optionOrder;
+      } catch (e) {
+        print('   ⚠️ Error cargando orden de opciones de Firestore: $e');
         return [0, 1, 2, 3];
       }
-
-      final optionOrders = _decodeOptionOrders(optionOrdersJson);
-      return optionOrders[progress.currentIndex] ?? [0, 1, 2, 3];
     } catch (e) {
       print('⚠️ Error obteniendo orden de opciones: $e');
       return [0, 1, 2, 3];
@@ -619,9 +893,66 @@ class QuizService {
       .toList(growable: false);
 
   Future<List<int>?> _getOrder(String categoryId) async {
+    // Primero intenta cargar de SharedPreferences (rápido)
     final prefs = await SharedPreferences.getInstance();
     final list = prefs.getStringList(_keyOrder(categoryId));
-    return list?.map((e) => int.parse(e)).toList();
+    
+    if (list != null) {
+      print('   ✅ Orden cargada de SharedPreferences');
+      return list.map((e) => int.parse(e)).toList();
+    }
+    
+    print('   ⚠️ Orden NO encontrada en SharedPreferences, intentando Firestore...');
+    
+    // Fallback: intenta cargar de Firestore
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) {
+        print('   ❌ Usuario no autenticado para fallback a Firestore');
+        return null;
+      }
+      
+      // Buscar sesión en progreso para esta categoría
+      final snapshot = await _firestore
+          .collection('quizSessions')
+          .doc(userId)
+          .collection('sessions')
+          .where('categoryId', isEqualTo: categoryId)
+          .where('status', isEqualTo: 'en_progreso')
+          .limit(1)
+          .get()
+          .timeout(const Duration(seconds: 5));
+      
+      if (snapshot.docs.isEmpty) {
+        print('   ❌ No hay sesión en progreso en Firestore');
+        return null;
+      }
+      
+      final sessionData = snapshot.docs.first.data();
+      final order = (sessionData['questionOrder'] as List?)
+          ?.cast<int>();
+      
+      if (order == null) {
+        print('   ❌ Sesión en Firestore no tiene questionOrder');
+        return null;
+      }
+      
+      print('   ✅ Orden cargada de Firestore: $order');
+      
+      // Guardar en SharedPreferences para la próxima vez
+      try {
+        final orderStrings = order.map((e) => e.toString()).toList();
+        await prefs.setStringList(_keyOrder(categoryId), orderStrings);
+        print('   ✅ Orden sincronizada a SharedPreferences');
+      } catch (e) {
+        print('   ⚠️ No se pudo guardar orden en SharedPreferences: $e');
+      }
+      
+      return order;
+    } catch (e) {
+      print('   ❌ Error cargando orden de Firestore: $e');
+      return null;
+    }
   }
 
   /// ✨ NUEVA FUNCIÓN: Validar integridad de sesión
@@ -635,9 +966,23 @@ class QuizService {
 
       // Verificar que la sesión no sea demasiado antigua (> 7 días)
       if (sessionData['startDate'] != null) {
-        final startDate = sessionData['startDate'] is DateTime
-            ? sessionData['startDate']
-            : DateTime.parse(sessionData['startDate'].toString());
+        DateTime startDate;
+        
+        if (sessionData['startDate'] is DateTime) {
+          startDate = sessionData['startDate'];
+        } else if (sessionData['startDate'] is Timestamp) {
+          // Manejar Timestamp de Firestore
+          startDate = (sessionData['startDate'] as Timestamp).toDate();
+        } else {
+          // Intenta parsear como String (fallback)
+          try {
+            startDate = DateTime.parse(sessionData['startDate'].toString());
+          } catch (_) {
+            print('⚠️ No se puede parsear startDate: ${sessionData['startDate']}');
+            return false;
+          }
+        }
+        
         final ageInDays = DateTime.now().difference(startDate).inDays;
         if (ageInDays > 7) {
           print('⚠️ Sesión demasiado antigua ($ageInDays días)');
@@ -683,11 +1028,44 @@ class QuizService {
   }
 
   /// ✨ NUEVA FUNCIÓN: Codificar orden de opciones a string
-  String _encodeOptionOrders(Map<int, List<int>> optionOrders) {
-    final encoded = optionOrders.map(
-      (k, v) => MapEntry(k.toString(), v),
-    );
-    return encoded.toString(); // En producción usar jsonEncode
+  /// Maneja tanto Map<int, List<int>> como Map<String, dynamic> de Firestore
+  String _encodeOptionOrders(dynamic optionOrders) {
+    try {
+      if (optionOrders is String) {
+        // Ya está codificado
+        return optionOrders;
+      }
+      
+      if (optionOrders is Map) {
+        // Convertir Map a string formateado
+        final buffer = StringBuffer('{');
+        final entries = optionOrders.entries.toList();
+        for (int i = 0; i < entries.length; i++) {
+          final key = entries[i].key;
+          final value = entries[i].value;
+          
+          // Manejar tanto claves int como String
+          final keyStr = key is int ? key.toString() : key;
+          
+          // Manejar valores que podrían ser List<int> o List<dynamic>
+          final valueList = (value is List) 
+              ? value.map((v) => v is int ? v : int.tryParse(v.toString()) ?? 0).toList()
+              : [];
+          
+          buffer.write('$keyStr: $valueList');
+          if (i < entries.length - 1) {
+            buffer.write(', ');
+          }
+        }
+        buffer.write('}');
+        return buffer.toString();
+      }
+      
+      return optionOrders.toString();
+    } catch (e) {
+      print('⚠️ Error codificando optionOrders: $e');
+      return '{}';
+    }
   }
 
   /// ✨ NUEVA FUNCIÓN: Decodificar orden de opciones desde string
@@ -697,12 +1075,14 @@ class QuizService {
       final decoded = <int, List<int>>{};
       
       // Formato esperado: {0: [1, 0, 3, 2], 1: [2, 3, 1, 0], ...}
+      // o desde Firestore: {0: [1, 0, 3, 2], 1: [2, 3, 1, 0], ...}
       final regex = RegExp(r'(\d+):\s*\[([0-9, ]+)\]');
       for (final match in regex.allMatches(encoded)) {
         final index = int.parse(match.group(1)!);
-        final options = match.group(2)!
+        final optionsStr = match.group(2)!;
+        final options = optionsStr
             .split(',')
-            .map((s) => int.parse(s.trim()))
+            .map((s) => int.tryParse(s.trim()) ?? 0)
             .toList();
         decoded[index] = options;
       }
@@ -717,15 +1097,24 @@ class QuizService {
   /// ✨ NUEVA FUNCIÓN: Cargar progreso desde almacenamiento local
   Future<QuizProgressModel?> _loadProgressLocally(String categoryId) async {
     try {
+      print('💾 _loadProgressLocally() para categoryId=$categoryId');
       final prefs = await SharedPreferences.getInstance();
+      
       final order = prefs.getStringList(_keyOrder(categoryId));
+      print('   order: $order');
+      
       final index = prefs.getInt(_keyIndex(categoryId));
+      print('   index: $index');
+      
       final answers = prefs.getStringList(_keyAnswers(categoryId));
+      print('   answers: $answers');
 
       if (order == null || index == null || answers == null) {
+        print('❌ Faltan datos locales');
         return null;
       }
 
+      print('✅ Progreso local recuperado');
       return QuizProgressModel(
         categoryId: categoryId,
         currentIndex: index,

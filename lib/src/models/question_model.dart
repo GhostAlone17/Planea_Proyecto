@@ -41,13 +41,21 @@ class QuestionModel {
         'dificultad': dificultad,
       };
 
-  factory QuestionModel.fromMap(Map<String, dynamic> map) => QuestionModel(
-        id: map['id'],
-        categoryId: map['categoryId'],
-        pregunta: map['pregunta'],
-        opciones: List<String>.from(map['opciones']),
-        indiceCorrecto: map['indiceCorrecto'],
-        explicacion: map['explicacion'],
-        dificultad: map['dificultad'],
-      );
+  factory QuestionModel.fromMap(Map<String, dynamic> map) {
+    // Asegurar que categoryId sea un String (manejar si viene como int)
+    final categoryIdValue = map['categoryId'];
+    final categoryId = categoryIdValue is String 
+        ? categoryIdValue 
+        : (categoryIdValue?.toString() ?? '');
+    
+    return QuestionModel(
+      id: map['id'] as String? ?? '',
+      categoryId: categoryId,
+      pregunta: map['pregunta'] as String? ?? '',
+      opciones: List<String>.from(map['opciones'] ?? []),
+      indiceCorrecto: map['indiceCorrecto'] as int? ?? 0,
+      explicacion: map['explicacion'],
+      dificultad: map['dificultad'],
+    );
+  }
 }

@@ -32,11 +32,17 @@ class CategoryModel {
         'grado': grado,
       };
 
-  factory CategoryModel.fromMap(Map<String, dynamic> map) => CategoryModel(
-        id: map['id'],
-        nombre: map['nombre'],
-        descripcion: map['descripcion'],
-        totalReactivos: map['totalReactivos'],
-        grado: map['grado'],
-      );
+  factory CategoryModel.fromMap(Map<String, dynamic> map) {
+    // Asegurar que id sea un String (manejar si viene como int)
+    final idValue = map['id'];
+    final id = idValue is String ? idValue : (idValue?.toString() ?? '');
+    
+    return CategoryModel(
+      id: id,
+      nombre: map['nombre'] ?? '',
+      descripcion: map['descripcion'],
+      totalReactivos: map['totalReactivos'],
+      grado: map['grado'],
+    );
+  }
 }

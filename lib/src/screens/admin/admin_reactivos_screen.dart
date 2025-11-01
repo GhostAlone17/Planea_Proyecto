@@ -207,28 +207,34 @@ class _AdminReactivosScreenState extends State<AdminReactivosScreen> {
             const SizedBox(height: 16),
 
             // Filtro por categoría
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  '📚 Categoría:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  '📚 Categorías',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
-                ...[
-                  'Todas',
-                  ..._categorias.map((c) => c.nombre),
-                ].map((cat) {
-                  final isSelected = _filtroCategoria == cat;
-                  return FilterChip(
-                    label: Text(cat),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      setState(() => _filtroCategoria = cat);
-                      _filtrarReactivos();
-                    },
-                  );
-                }).toList(),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ...[
+                      'Todas',
+                      ..._categorias.map((c) => c.nombre),
+                    ].map((cat) {
+                      final isSelected = _filtroCategoria == cat;
+                      return FilterChip(
+                        label: Text(cat),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          setState(() => _filtroCategoria = cat);
+                          _filtrarReactivos();
+                        },
+                      );
+                    }).toList(),
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 12),

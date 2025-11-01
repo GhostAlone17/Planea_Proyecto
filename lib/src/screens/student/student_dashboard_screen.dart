@@ -53,7 +53,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             .doc(userId)
             .get();
 
-        if (userDoc.exists) {
+        if (userDoc.exists && mounted) {
           // Intentar primero con 'gradoNombre', luego con 'gradoId'
           String? gradoId = userDoc.data()?['gradoNombre'] as String?;
           if (gradoId == null || gradoId.isEmpty) {
@@ -66,9 +66,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             print('✅ Grado cargado desde Firestore: $gradoId -> $gradoNombre');
             if (mounted) {
               setState(() => _gradoEstudiante = gradoNombre);
+              // Cargar categorías filtradas por grado (usar el nombre legible)
+              _futureCategories = _quizService.getCategoriesByGrade(gradoNombre);
             }
-            // Cargar categorías filtradas por grado (usar el nombre legible)
-            _futureCategories = _quizService.getCategoriesByGrade(gradoNombre);
           } else {
             print('⚠️ No se encontró gradoNombre ni gradoId para el usuario');
           }
@@ -77,7 +77,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         }
       }
     } catch (e) {
-      print('❌ Error cargando grado: $e');
+      if (mounted) {
+        print('❌ Error cargando grado: $e');
+      }
       // Mantener el fallback: categorías generales
     }
   }
@@ -114,11 +116,17 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   Future<void> _cargarReporte() async {
-    final userId = context.read<AuthenticationService>().currentUser?.uid;
-    if (userId != null) {
-      final reporte = await _adminService.obtenerReporteEstudiante(userId);
+    try {
+      final userId = context.read<AuthenticationService>().currentUser?.uid;
+      if (userId != null) {
+        final reporte = await _adminService.obtenerReporteEstudiante(userId);
+        if (mounted) {
+          setState(() => _reporteEstudiante = reporte);
+        }
+      }
+    } catch (e) {
       if (mounted) {
-        setState(() => _reporteEstudiante = reporte);
+        print('⚠️ Error cargando reporte: $e');
       }
     }
   }
@@ -350,24 +358,26 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   );
                 }
 
-                final categories = snapshot.data!;
+                // Ordenar alfabéticamente
+                final categories = snapshot.data!..sort((a, b) => a.nombre.compareTo(b.nombre));
 
-                return ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
+                return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLarge),
-                  itemCount: categories.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final category = categories[index];
-                    final categoryPerformance = _reporteEstudiante?.desempenoPorCategoria[category.id];
-
-                    return _buildCategoryCard(
-                      context,
-                      category,
-                      categoryPerformance,
-                    );
-                  },
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: categories.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 0),
+                    itemBuilder: (context, index) {
+                      final category = categories[index];
+                      final categoryPerformance = _reporteEstudiante?.desempenoPorCategoria[category.id];
+                      return _buildCategoryListItem(
+                        context,
+                        category,
+                        categoryPerformance,
+                      );
+                    },
+                  ),
                 );
               },
             ),
@@ -420,151 +430,99 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  Widget _buildCategoryCard(
+  /// Item de categoría compacto tipo lista (móvil)
+  Widget _buildCategoryListItem(
     BuildContext context,
     CategoryModel category,
     CategoryPerformance? performance,
   ) {
     final percentage = performance?.porcentaje ?? 0.0;
-    final level = performance?.obtenerNivelCategoria() ?? 'Sin intentos';
+    final color = _getColorForPercentage(percentage);
+    final isWideScreen = MediaQuery.of(context).size.width > 600;
 
-    return Card(
-      elevation: 2,
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
-        onTap: () async {
-          // Iniciar quiz
-          try {
-            final progress = await _quizService.startQuiz(category.id);
-            if (!mounted) return;
-
-            await Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => QuizScreen(
-                  category: category,
-                  initialProgress: progress,
-                ),
-              ),
-            );
-
-            // Recargar reporte después de terminar
-            _cargarReporte();
-          } catch (e) {
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error: $e')),
-            );
-          }
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        onTap: () => _iniciarQuiz(context, category),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: isWideScreen ? 20 : 12,
+            vertical: isWideScreen ? 12 : 10,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: Colors.grey.shade200, width: 1)),
+          ),
+          child: Row(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          category.nombre,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          category.descripcion ?? 'Práctica de ${category.nombre}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.grey,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: _getColorForPercentage(percentage).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '${percentage.toStringAsFixed(0)}%',
+              // Icono y nombre (lado izquierdo)
+              Expanded(
+                flex: isWideScreen ? 3 : 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      category.nombre,
                       style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: _getColorForPercentage(percentage),
+                        fontSize: isWideScreen ? 15 : 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    // Barra de progreso inline
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: SizedBox(
+                        height: 3,
+                        child: LinearProgressIndicator(
+                          value: percentage / 100,
+                          backgroundColor: Colors.grey.shade200,
+                          valueColor: AlwaysStoppedAnimation(color),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              // Barra de progreso
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: percentage / 100,
-                  minHeight: 6,
-                  backgroundColor: Colors.grey.shade200,
-                  valueColor: AlwaysStoppedAnimation(
-                    _getColorForPercentage(percentage),
+              const SizedBox(width: 12),
+              // Porcentaje (lado derecho)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '${percentage.toStringAsFixed(0)}%',
+                  style: TextStyle(
+                    fontSize: isWideScreen ? 12 : 11,
+                    fontWeight: FontWeight.bold,
+                    color: color,
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    level,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: _getColorForPercentage(percentage),
+              const SizedBox(width: 12),
+              // Botón compacto
+              Container(
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: InkWell(
+                  onTap: () => _iniciarQuiz(context, category),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    child: Icon(
+                      Icons.play_arrow,
+                      size: isWideScreen ? 20 : 18,
+                      color: Colors.white,
                     ),
                   ),
-                  if (performance != null)
-                    Text(
-                      '${performance.aciertos}/${performance.intentos}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    try {
-                      final progress = await _quizService.startQuiz(category.id);
-                      if (!mounted) return;
-
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => QuizScreen(
-                            category: category,
-                            initialProgress: progress,
-                          ),
-                        ),
-                      );
-
-                      _cargarReporte();
-                    } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error: $e')),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Iniciar Test'),
                 ),
               ),
             ],
@@ -572,6 +530,115 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         ),
       ),
     );
+  }
+
+  /// Método para iniciar quiz con loading indicator
+  Future<void> _iniciarQuiz(BuildContext context, CategoryModel category) async {
+    // Guardar referencia del context de manera segura
+    if (!mounted) return;
+    
+    // Crear identificador para el diálogo
+    bool dialogShown = false;
+    
+    try {
+      // Mostrar loading dialog que bloquea interacción
+      if (!mounted) return;
+      
+      showDialog(
+        context: context,
+        barrierDismissible: false, // No permite cerrar tocando fuera
+        builder: (_) => WillPopScope(
+          onWillPop: () async => false, // Evita cerrar con botón atrás
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(
+                    width: 50,
+                    height: 50,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      valueColor: AlwaysStoppedAnimation(Color(0xFF1B5E20)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Iniciando ${category.nombre}...',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      dialogShown = true;
+
+      final progress = await _quizService.startQuiz(category.id);
+      if (!mounted) return;
+
+      // Cerrar loading dialog si está abierto
+      if (dialogShown && Navigator.canPop(context)) {
+        Navigator.pop(context); // Pop el diálogo
+      }
+
+      if (!mounted) return;
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => QuizScreen(
+            category: category,
+            initialProgress: progress,
+          ),
+        ),
+      );
+
+      // Recargar reporte solo si el widget aún está en el árbol
+      if (mounted) {
+        await Future.delayed(const Duration(milliseconds: 500)); // Pequeño delay para evitar loops
+        if (mounted) {
+          _cargarReporte();
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      // Cerrar loading dialog si está abierto
+      if (dialogShown && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      if (!mounted) return;
+
+      // Mejorar mensaje de error según tipo
+      String mensajeUsuario = '❌ Error iniciando el test';
+      
+      if (e.toString().contains('No hay preguntas disponibles')) {
+        mensajeUsuario = '⚠️ No hay preguntas disponibles en este test. Por favor contacta al administrador.';
+      } else if (e.toString().contains('Usuario no autenticado')) {
+        mensajeUsuario = '❌ Sesión expirada. Por favor, inicia sesión nuevamente.';
+      } else if (e.toString().contains('conexión')) {
+        mensajeUsuario = '❌ Error de conexión. Verifica tu conexión a internet.';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(mensajeUsuario),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
   }
 
   Color _getColorForPercentage(double percentage) {

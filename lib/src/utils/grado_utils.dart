@@ -7,12 +7,17 @@ class GradoUtils {
     '1': 'Primaria',
     '2': 'Primaria',
     '3': 'Primaria',
+    '3P': 'Primaria',
     '4': 'Primaria',
+    '4P': 'Primaria',
     '5': 'Primaria',
+    '5P': 'Primaria',
     '6': 'Primaria',
+    '6P': 'Primaria',
     
     // Secundaria
     '7': 'Secundaria',
+    '3S': 'Secundaria',
     '8': 'Secundaria',
     '9': 'Secundaria',
     'SEC': 'Secundaria',
