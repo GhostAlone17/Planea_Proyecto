@@ -34,6 +34,9 @@ class UserModel {
   /// Para alumnos: ID del grado o curso
   final String? gradoId;
 
+  /// Para alumnos: lista de IDs de maestros asignados
+  final List<String>? maestroIds;
+
   /// Constructor principal del modelo de usuario
   UserModel({
     required this.id,
@@ -47,6 +50,7 @@ class UserModel {
     this.activo = true,
     this.hijosIds,
     this.gradoId,
+    this.maestroIds,
   });
 
   /// Convierte el modelo a un Map para guardarlo en base de datos
@@ -63,6 +67,7 @@ class UserModel {
       'activo': activo,
       'hijosIds': hijosIds,
       'gradoId': gradoId,
+      'maestroIds': maestroIds,
     };
   }
 
@@ -84,6 +89,9 @@ class UserModel {
           ? List<String>.from(map['hijosIds']) 
           : null,
       gradoId: map['gradoId'],
+      maestroIds: map['maestroIds'] != null
+          ? List<String>.from(map['maestroIds'])
+          : null,
     );
   }
 
@@ -100,6 +108,7 @@ class UserModel {
     bool? activo,
     List<String>? hijosIds,
     String? gradoId,
+    List<String>? maestroIds,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -113,6 +122,7 @@ class UserModel {
       activo: activo ?? this.activo,
       hijosIds: hijosIds ?? this.hijosIds,
       gradoId: gradoId ?? this.gradoId,
+      maestroIds: maestroIds ?? this.maestroIds,
     );
   }
   
