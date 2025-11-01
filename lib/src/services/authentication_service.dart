@@ -98,21 +98,17 @@ class AuthenticationService extends ChangeNotifier {
     required String password,
   }) async {
     try {
-      debugPrint('🔵 [AUTH] login() iniciado con email: $email');
       _isLoading = true;
       _errorMessage = null;
       notifyListeners();
-      debugPrint('🔵 [AUTH] isLoading = true, notificando listeners');
 
       final userCredential = await _firebaseAuth.signInWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
-      debugPrint('✅ [AUTH] Firebase Auth exitoso');
 
       // NUEVO: Verificar que el usuario esté activo en Firestore
       if (userCredential.user != null) {
-        debugPrint('🔵 [AUTH] Verificando si usuario está activo en Firestore...');
         final userDoc = await FirebaseFirestore.instance
             .collection('usuarios')
             .doc(userCredential.user!.uid)
@@ -120,10 +116,14 @@ class AuthenticationService extends ChangeNotifier {
 
         if (userDoc.exists) {
           final isActivo = userDoc.data()?['activo'] ?? true;
-          debugPrint('🔵 [AUTH] Usuario activo: $isActivo');
+          final nombre = userDoc.data()?['nombre'] as String?;
+          
+          // Actualizar displayName si existe en Firestore
+          if (nombre != null && nombre.isNotEmpty) {
+            await userCredential.user?.updateDisplayName(nombre);
+          }
           
           if (!isActivo) {
-            debugPrint('🔴 [AUTH] Usuario deshabilitado');
             // Usuario deshabilitado, cerrar sesión inmediatamente
             await _firebaseAuth.signOut();
             _errorMessage = 'Tu cuenta ha sido deshabilitada. Contacta al administrador.';
@@ -132,26 +132,20 @@ class AuthenticationService extends ChangeNotifier {
             notifyListeners();
             return false;
           }
-        } else {
-          debugPrint('⚠️ [AUTH] Documento de usuario no existe en Firestore');
         }
       }
 
       _currentUser = userCredential.user;
       _isLoading = false;
       notifyListeners();
-      debugPrint('✅ [AUTH] login() completado exitosamente');
 
       return true;
     } on firebase_auth.FirebaseAuthException catch (e) {
-      debugPrint('🔴 [AUTH] FirebaseAuthException: ${e.code}');
       _errorMessage = _getErrorMessage(e.code);
       _isLoading = false;
       notifyListeners();
-      debugPrint('🔴 [AUTH] Error: $_errorMessage');
       return false;
     } catch (e) {
-      debugPrint('🔴 [AUTH] Error desconocido en login: $e');
       _errorMessage = 'Error desconocido: $e';
       _isLoading = false;
       notifyListeners();

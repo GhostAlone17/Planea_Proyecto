@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'src/config/app_theme.dart';
 import 'src/config/app_constants.dart';
 import 'src/screens/login_screen.dart';
-import 'src/screens/categories_screen.dart';
+import 'src/screens/student/student_dashboard_screen.dart';
 import 'src/screens/admin/admin_dashboard.dart';
 import 'src/services/firebase_service.dart';
 import 'src/services/service_providers.dart';
@@ -32,11 +32,11 @@ void main() async {
 class PlantelApp extends StatelessWidget {
   const PlantelApp({super.key});
 
-  /// Verifica si el usuario actual es un administrador
-  Future<bool> _verificarSiEsAdmin(AuthenticationService authService) async {
+  /// Obtiene el tipo de usuario del usuario actual
+  Future<String?> _obtenerTipoUsuario(AuthenticationService authService) async {
     try {
       final userId = authService.currentUser?.uid;
-      if (userId == null) return false;
+      if (userId == null) return null;
 
       final firestoreService = FirestoreService();
       final userData = await firestoreService.getDocument(
@@ -45,14 +45,13 @@ class PlantelApp extends StatelessWidget {
       );
 
       if (userData != null) {
-        return userData['tipoUsuario'] == 'admin' ||
-            userData['tipoUsuario'] == 'docente';
+        return userData['tipoUsuario'] as String?;
       }
 
-      return false;
+      return 'alumno'; // Por defecto
     } catch (e) {
-      debugPrint('Error verificando si es admin: $e');
-      return false;
+      debugPrint('Error verificando tipo de usuario: $e');
+      return 'alumno';
     }
   }
 
@@ -84,9 +83,9 @@ class PlantelApp extends StatelessWidget {
             }
 
             if (authService.isAuthenticated) {
-              // Verificar si es admin
-              return FutureBuilder<bool>(
-                future: _verificarSiEsAdmin(authService),
+              // Verificar tipo de usuario: Admin o Estudiante
+              return FutureBuilder<String?>(
+                future: _obtenerTipoUsuario(authService),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return Scaffold(
@@ -97,15 +96,19 @@ class PlantelApp extends StatelessWidget {
                     );
                   }
 
-                  final esAdmin = snapshot.data ?? false;
+                  final tipoUsuario = snapshot.data;
 
-                  return esAdmin
-                      ? AdminDashboard()
-                      : CategoriesScreen(
-                          onLogout: () {
-                            authService.logout();
-                          },
-                        );
+                  // Admin o Docente
+                  if (tipoUsuario == 'admin' || tipoUsuario == 'docente') {
+                    return AdminDashboard();
+                  }
+
+                  // Estudiante (por defecto)
+                  return StudentDashboardScreen(
+                    onLogout: () {
+                      authService.logout();
+                    },
+                  );
                 },
               );
             }
