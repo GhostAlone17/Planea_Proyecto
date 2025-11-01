@@ -424,6 +424,7 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Primera fila: Filtros principales
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -477,13 +478,23 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
                     Chip(
                       label: Text(_getEtiquetaEstado(_filtroEstado)),
                     ),
-
-                    // Botón de limpiar filtros - SIEMPRE VISIBLE
-                    ActionChip(
-                      label: const Text('Limpiar filtros'),
-                      avatar: const Icon(Icons.clear, size: 18),
-                      onPressed: _limpiarFiltros,
-                      backgroundColor: Colors.orange.shade100,
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Segunda fila: Botón Limpiar
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Tooltip(
+                      message: 'Restablecer todos los filtros',
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.clear, size: 18),
+                        label: const Text('Limpiar'),
+                        onPressed: _limpiarFiltros,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey.shade400,
+                        ),
+                      ),
                     ),
                   ],
                 ),

@@ -48,6 +48,22 @@ class ReactiveModel {
   }
 
   factory ReactiveModel.fromMap(Map<String, dynamic> map) {
+    // Manejar fechaCreacion que puede ser String o Timestamp de Firestore
+    DateTime fechaCreacion;
+    final fechaReg = map['fechaCreacion'];
+    if (fechaReg is String) {
+      fechaCreacion = DateTime.parse(fechaReg);
+    } else if (fechaReg != null) {
+      // Timestamp de Firestore
+      try {
+        fechaCreacion = (fechaReg as dynamic).toDate();
+      } catch (e) {
+        fechaCreacion = DateTime.now();
+      }
+    } else {
+      fechaCreacion = DateTime.now();
+    }
+
     return ReactiveModel(
       id: map['id'] ?? '',
       categoryId: map['categoryId'] ?? '',
@@ -57,7 +73,7 @@ class ReactiveModel {
       explicacion: map['explicacion'],
       dificultad: map['dificultad'] ?? 2,
       activa: map['activa'] ?? true,
-      fechaCreacion: DateTime.parse(map['fechaCreacion']),
+      fechaCreacion: fechaCreacion,
       creadoPor: map['creadoPor'] ?? '',
     );
   }

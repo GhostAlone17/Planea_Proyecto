@@ -80,6 +80,55 @@ class _AdminReactivosScreenState extends State<AdminReactivosScreen> {
       context: context,
       builder: (context) => FormularioReactivo(
         categorias: _categorias,
+        adminService: _adminService,
+      ),
+    );
+  }
+
+  void _editarReactivo(ReactiveModel reactivo) {
+    showDialog(
+      context: context,
+      builder: (context) => FormularioReactivo(
+        categorias: _categorias,
+        reactivoExistente: reactivo,
+        adminService: _adminService,
+      ),
+    );
+  }
+
+  void _eliminarReactivo(ReactiveModel reactivo) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar Reactivo'),
+        content: const Text('¿Estás seguro que deseas eliminar este reactivo?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final success = await _adminService.eliminarReactivo(reactivo.id);
+              if (mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      success 
+                        ? '✅ Reactivo eliminado' 
+                        : '❌ Error al eliminar',
+                    ),
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Eliminar'),
+          ),
+        ],
       ),
     );
   }
@@ -157,7 +206,7 @@ class _AdminReactivosScreenState extends State<AdminReactivosScreen> {
               ),
             const SizedBox(height: 16),
 
-            // Filtro por categoría - Responsive con Wrap
+            // Filtro por categoría
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -182,13 +231,41 @@ class _AdminReactivosScreenState extends State<AdminReactivosScreen> {
                 }).toList(),
               ],
             ),
+            const SizedBox(height: 12),
+            // Botón Limpiar Filtros
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Tooltip(
+                  message: 'Restablecer todos los filtros',
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.clear, size: 18),
+                    label: const Text('Limpiar'),
+                    onPressed: () {
+                      setState(() {
+                        _filtroCategoria = 'Todas';
+                        _dificultadMin = 1;
+                        _dificultadMax = 3;
+                        _searchController.clear();
+                      });
+                      _filtrarReactivos();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey.shade400,
+                    ),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 20),
 
             // Lista de reactivos
             Expanded(
               child: StreamBuilder<List<ReactiveModel>>(
                 stream: _adminService.streamReactivos(
-                  categoryId: _filtroCategoria == 'Todas' ? null : _filtroCategoria,
+                  categoryId: _filtroCategoria == 'Todas' 
+                    ? null 
+                    : _categorias.firstWhere((c) => c.nombre == _filtroCategoria, orElse: () => _categorias[0]).id,
                 ),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
@@ -206,7 +283,8 @@ class _AdminReactivosScreenState extends State<AdminReactivosScreen> {
                   final filtrados = reactivos
                       .where((r) {
                         // Filtro de búsqueda
-                        final coincideTexto = r.pregunta.toLowerCase().contains(query);
+                        final coincideTexto = r.pregunta.toLowerCase().contains(query) ||
+                                              (r.explicacion?.toLowerCase().contains(query) ?? false);
                         
                         // Filtro de dificultad
                         final coincideDificultad = r.dificultad >= _dificultadMin && 
@@ -267,13 +345,11 @@ class _AdminReactivosScreenState extends State<AdminReactivosScreen> {
                                       ),
                                     ],
                                     onSelected: (value) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                              '$value reactivo ${reactivo.id}'),
-                                        ),
-                                      );
+                                      if (value == 'edit') {
+                                        _editarReactivo(reactivo);
+                                      } else if (value == 'delete') {
+                                        _eliminarReactivo(reactivo);
+                                      }
                                     },
                                   ),
                                 ],
@@ -355,10 +431,14 @@ class _AdminReactivosScreenState extends State<AdminReactivosScreen> {
 /// Diálogo para crear/editar reactivo
 class FormularioReactivo extends StatefulWidget {
   final List<CategoryModelV2> categorias;
+  final ReactiveModel? reactivoExistente;
+  final AdminService adminService;
 
   const FormularioReactivo({
     Key? key,
     required this.categorias,
+    this.reactivoExistente,
+    required this.adminService,
   }) : super(key: key);
 
   @override
@@ -373,18 +453,34 @@ class _FormularioReactivoState extends State<FormularioReactivo> {
   int _respuestaCorrecta = 0;
   int _dificultad = 1;
   late String _categoriaId;
+  bool _guardando = false;
 
   @override
   void initState() {
     super.initState();
     _categoriaId = widget.categorias.isNotEmpty ? widget.categorias[0].id : '';
-    // Inicializar con 4 opciones por defecto
-    _opcionesControllers = List.generate(4, (_) => TextEditingController());
+    
+    if (widget.reactivoExistente != null) {
+      // Cargar datos del reactivo existente
+      final reactivo = widget.reactivoExistente!;
+      _preguntaController.text = reactivo.pregunta;
+      _categoriaId = reactivo.categoryId;
+      _respuestaCorrecta = reactivo.respuestaCorrecta;
+      _dificultad = reactivo.dificultad;
+      _explicacionController.text = reactivo.explicacion ?? '';
+      _opcionesControllers = reactivo.opciones
+          .map((opcion) => TextEditingController(text: opcion))
+          .toList();
+    } else {
+      // Inicializar con 4 opciones por defecto
+      _opcionesControllers = List.generate(4, (_) => TextEditingController());
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
+    final isEditing = widget.reactivoExistente != null;
 
     return Dialog(
       child: SingleChildScrollView(
@@ -398,9 +494,9 @@ class _FormularioReactivoState extends State<FormularioReactivo> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Nuevo Reactivo',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                Text(
+                  isEditing ? 'Editar Reactivo' : 'Nuevo Reactivo',
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 20),
                 TextField(
@@ -600,21 +696,19 @@ class _FormularioReactivoState extends State<FormularioReactivo> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: _guardando ? null : () => Navigator.pop(context),
                       child: const Text('Cancelar'),
                     ),
                     const SizedBox(width: 12),
                     ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content:
-                                Text('Reactivo guardado exitosamente'),
-                          ),
-                        );
-                      },
-                      child: const Text('Guardar'),
+                      onPressed: _guardando ? null : _guardarReactivo,
+                      child: _guardando
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(isEditing ? 'Actualizar' : 'Guardar'),
                     ),
                   ],
                 ),
@@ -624,6 +718,84 @@ class _FormularioReactivoState extends State<FormularioReactivo> {
         ),
       ),
     );
+  }
+
+  Future<void> _guardarReactivo() async {
+    // Validar campos
+    if (_preguntaController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor ingresa una pregunta')),
+      );
+      return;
+    }
+
+    // Validar que todas las opciones tengan texto
+    if (_opcionesControllers.any((c) => c.text.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor completa todas las opciones')),
+      );
+      return;
+    }
+
+    setState(() => _guardando = true);
+
+    try {
+      final opciones = _opcionesControllers.map((c) => c.text).toList();
+      final isEditing = widget.reactivoExistente != null;
+
+      bool success;
+      if (isEditing) {
+        // Actualizar reactivo existente
+        success = await widget.adminService.actualizarReactivo(
+          id: widget.reactivoExistente!.id,
+          pregunta: _preguntaController.text,
+          opciones: opciones,
+          respuestaCorrecta: _respuestaCorrecta,
+          dificultad: _dificultad,
+          explicacion: _explicacionController.text.isEmpty 
+              ? null 
+              : _explicacionController.text,
+        );
+      } else {
+        // Crear nuevo reactivo
+        success = await widget.adminService.crearReactivo(
+          categoryId: _categoriaId,
+          pregunta: _preguntaController.text,
+          opciones: opciones,
+          respuestaCorrecta: _respuestaCorrecta,
+          dificultad: _dificultad,
+          explicacion: _explicacionController.text.isEmpty 
+              ? null 
+              : _explicacionController.text,
+          creadoPor: 'admin',
+        );
+      }
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              success 
+                ? (isEditing 
+                    ? '✅ Reactivo actualizado' 
+                    : '✅ Reactivo creado exitosamente')
+                : '❌ Error al guardar',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _guardando = false);
+      }
+    }
   }
 
   @override

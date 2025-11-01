@@ -11,6 +11,32 @@ import 'dart:typed_data';
 class ReportsService {
   final _firestore = FirebaseFirestore.instance;
 
+  // ==================== MÉTODOS AUXILIARES ====================
+
+  /// Obtiene lista de grados únicos desde la colección de usuarios
+  Future<List<String>> obtenerGradosDisponibles() async {
+    try {
+      final snapshot = await _firestore
+          .collection('usuarios')
+          .where('tipoUsuario', isEqualTo: 'alumno')
+          .get();
+
+      final gradosSet = <String>{};
+      for (var doc in snapshot.docs) {
+        final grado = doc['gradoNombre'] as String?;
+        if (grado != null && grado.isNotEmpty) {
+          gradosSet.add(grado);
+        }
+      }
+
+      final gradosList = gradosSet.toList()..sort();
+      return gradosList.isEmpty ? ['Sin grado asignado'] : gradosList;
+    } catch (e) {
+      print('❌ Error obteniendo grados disponibles: $e');
+      return ['Sin grado asignado'];
+    }
+  }
+
   // ==================== REPORTE GENERAL ====================
 
   /// Obtiene datos generales consolidados de un grado
@@ -57,7 +83,8 @@ class ReportsService {
   /// Obtiene reporte consolidado de TODOS los grados
   Future<Map<String, dynamic>> obtenerReporteTodosGrados() async {
     try {
-      final grados = ['Primaria', 'Secundaria', 'Preparatoria'];
+      // 🔄 AHORA DINÁMICO: Obtener grados desde Firestore
+      final grados = await obtenerGradosDisponibles();
       final reportesPorGrado = <String, Map<String, dynamic>>{};
       
       int totalEstudiantesGlobal = 0;
@@ -96,24 +123,27 @@ class ReportsService {
   }
 
   /// Genera reporte de desempeño por categoría
+  /// 🔄 AHORA DINÁMICO: Obtiene categorías de Firestore sin hardcoding
   Future<Map<String, dynamic>> obtenerDesempenoPorCategoria({
     required String gradoNombre,
   }) async {
     try {
-      final snapshot = await _firestore
+      // Obtener todas las categorías desde Firestore (dinámico)
+      final categoriasSnapshot = await _firestore
           .collection('categorias')
-          .where('grado', isEqualTo: gradoNombre)
+          .orderBy('orden', descending: false)
           .get();
 
       final reporteData = <String, dynamic>{};
 
-      for (var doc in snapshot.docs) {
+      for (var doc in categoriasSnapshot.docs) {
+        final categoriaId = doc.id;
         final nombreCategoria = doc['nombre'] ?? 'Sin nombre';
 
         // Obtener todos los intentos para esta categoría
         final intentosSnapshot = await _firestore
             .collection('studentAttempts')
-            .where('categoryId', isEqualTo: doc.id)
+            .where('categoryId', isEqualTo: categoriaId)
             .get();
 
         if (intentosSnapshot.docs.isNotEmpty) {
@@ -151,7 +181,7 @@ class ReportsService {
           }
 
           reporteData[nombreCategoria] = {
-            'categoryId': doc.id,
+            'categoryId': categoriaId,
             'totalAciertos': totalAciertos,
             'totalIntentos': totalIntentos,
             'porcentajeGeneral': totalIntentos > 0 ? (totalAciertos / totalIntentos * 100) : 0.0,

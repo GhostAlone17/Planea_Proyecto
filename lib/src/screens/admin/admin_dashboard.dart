@@ -8,6 +8,7 @@ import 'admin_maestros_validation_screen.dart';
 import '../user_profile_modal.dart';
 import '../cambiar_password_screen.dart';
 import '../../services/authentication_service.dart';
+import '../../utils/firestore_seed.dart';
 
 /// Dashboard Principal para Admin
 /// Pantalla de inicio con opciones para gestionar:
@@ -247,6 +248,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
             const SizedBox(height: 32),
 
+            // 🌱 Card: Seed Data (Inicializar Base de Datos)
+            _buildAdminCard(
+              icon: Icons.storage,
+              title: '🌱 Inicializar BD',
+              description: 'Crear categorías y reactivos de prueba',
+              color: Colors.green,
+              onTap: () => _mostrarDialogoSeedData(),
+            ),
+            const SizedBox(height: 32),
+
             // Información
             Container(
               padding: const EdgeInsets.all(16),
@@ -275,6 +286,126 @@ class _AdminDashboardState extends State<AdminDashboard> {
         ),
       ),
     );
+  }
+
+  /// Muestra diálogo para ejecutar seed data
+  void _mostrarDialogoSeedData() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('🌱 Inicializar Base de Datos'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Esto creará:'),
+            SizedBox(height: 8),
+            Text('✅ 5 Categorías (Álgebra, Geometría, etc.)'),
+            Text('✅ 16 Reactivos (preguntas de prueba)'),
+            SizedBox(height: 16),
+            Text('¿Deseas continuar?'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _ejecutarSeedData();
+            },
+            icon: const Icon(Icons.check),
+            label: const Text('Crear'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Ejecuta el seed data y muestra progreso
+  Future<void> _ejecutarSeedData() async {
+    if (!mounted) return;
+
+    // Mostrar diálogo de carga
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        content: Row(
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(width: 16),
+            const Text('Inicializando base de datos...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      // Ejecutar seed
+      await FirestoreSeedData.seedAll();
+
+      if (!mounted) return;
+
+      // Cerrar diálogo de carga
+      Navigator.pop(context);
+
+      // Mostrar éxito
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('✅ Éxito'),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Base de datos inicializada correctamente.'),
+              SizedBox(height: 12),
+              Text('✅ Categorías creadas'),
+              Text('✅ Reactivos creados'),
+              SizedBox(height: 12),
+              Text('Ahora puedes crear tests para los estudiantes.'),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Aceptar'),
+            ),
+          ],
+        ),
+      );
+
+      print('✅ Seed data completado exitosamente');
+    } catch (e) {
+      if (!mounted) return;
+
+      // Cerrar diálogo de carga
+      Navigator.pop(context);
+
+      // Mostrar error
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('❌ Error'),
+          content: Text('Error inicializando BD: $e'),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Aceptar'),
+            ),
+          ],
+        ),
+      );
+
+      print('❌ Error en seed data: $e');
+    }
   }
 
   /// Construye una tarjeta de opción para el dashboard

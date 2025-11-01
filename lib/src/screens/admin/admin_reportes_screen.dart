@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/student_report_model.dart';
 import '../../models/category_model_v2.dart';
 import '../generar_reportes_screen.dart';
+import '../../services/admin_service.dart';
 
 /// Pantalla para ver reportes y estadísticas de estudiantes
 class AdminReportesScreen extends StatefulWidget {
@@ -13,75 +14,33 @@ class AdminReportesScreen extends StatefulWidget {
 
 class _AdminReportesScreenState extends State<AdminReportesScreen> {
   final List<CategoryModelV2> _categorias = CategoryModelV2.categoriasDefault();
+  final AdminService _adminService = AdminService();
   
-  // Datos de ejemplo para estadísticas
-  final Map<String, StudentReportModel> _reportesEstudiantes = {
-    'est_001': StudentReportModel(
-      id: '1',
-      userId: 'est_001',
-      userName: 'Juan Perez',
-      userEmail: 'juan@example.com',
-      totalTestsRealizados: 3,
-      totalAciertos: 24,
-      totalIntentos: 30,
-      promedioGeneral: 80.0,
-      desempenoPorCategoria: {
-        'algebra': CategoryPerformance(
-          categoryId: 'algebra',
-          categoryNombre: 'Algebra',
-          aciertos: 8,
-          intentos: 10,
-          porcentaje: 80.0,
-        ),
-        'trigonometria': CategoryPerformance(
-          categoryId: 'trigonometria',
-          categoryNombre: 'Trigonometria',
-          aciertos: 7,
-          intentos: 10,
-          porcentaje: 70.0,
-        ),
-        'geometria': CategoryPerformance(
-          categoryId: 'geometria',
-          categoryNombre: 'Geometria',
-          aciertos: 9,
-          intentos: 10,
-          porcentaje: 90.0,
-        ),
-      },
-      fechaUltimoTest: DateTime.now(),
-      fechaReporte: DateTime.now(),
-    ),
-    'est_002': StudentReportModel(
-      id: '2',
-      userId: 'est_002',
-      userName: 'Maria Garcia',
-      userEmail: 'maria@example.com',
-      totalTestsRealizados: 2,
-      totalAciertos: 17,
-      totalIntentos: 20,
-      promedioGeneral: 85.0,
-      desempenoPorCategoria: {
-        'algebra': CategoryPerformance(
-          categoryId: 'algebra',
-          categoryNombre: 'Algebra',
-          aciertos: 9,
-          intentos: 10,
-          porcentaje: 90.0,
-        ),
-        'trigonometria': CategoryPerformance(
-          categoryId: 'trigonometria',
-          categoryNombre: 'Trigonometria',
-          aciertos: 8,
-          intentos: 10,
-          porcentaje: 80.0,
-        ),
-      },
-      fechaUltimoTest: DateTime.now().subtract(const Duration(days: 1)),
-      fechaReporte: DateTime.now(),
-    ),
-  };
-
+  // 🔄 DINÁMICO: Cargar reportes desde Firestore en lugar de hardcoded
+  late Future<Map<String, StudentReportModel>> _futuroReportes;
   String _filtroDesempenio = 'Todos';
+
+  @override
+  void initState() {
+    super.initState();
+    _futuroReportes = _cargarReportes();
+  }
+
+  /// Carga todos los reportes de estudiantes desde Firestore
+  Future<Map<String, StudentReportModel>> _cargarReportes() async {
+    try {
+      final reportes = await _adminService.obtenerTodosLosReportes();
+      final mapa = <String, StudentReportModel>{};
+      for (var reporte in reportes) {
+        mapa[reporte.userId] = reporte;
+      }
+      print('✅ Reportes cargados: ${mapa.length} estudiantes');
+      return mapa;
+    } catch (e) {
+      print('❌ Error cargando reportes: $e');
+      return {};
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -108,90 +67,114 @@ class _AdminReportesScreenState extends State<AdminReportesScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: EdgeInsets.all(isMobile ? 8 : (isTablet ? 12 : 16)),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header mejorado - más compacto
-              Row(
+      body: FutureBuilder<Map<String, StudentReportModel>>(
+        future: _futuroReportes,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.analytics,
-                    size: isMobile ? 20 : 28,
-                    color: Colors.orange,
-                  ),
-                  SizedBox(width: isMobile ? 8 : 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Reportes y Estadísticas',
-                          style: TextStyle(
-                            fontSize: isMobile ? 16 : (isTablet ? 20 : 24),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          'Análisis del desempeño PLANEA',
-                          style: TextStyle(
-                            fontSize: isMobile ? 10 : 12,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                  const SizedBox(height: 16),
+                  Text('Error: ${snapshot.error}'),
                 ],
               ),
-              SizedBox(height: isMobile ? 12 : 20),
+            );
+          }
 
-              // Tarjetas de estadísticas generales (Responsive)
-              _buildEstadisticasGenerales(isWeb, isMobile),
-              SizedBox(height: isMobile ? 16 : 24),
+          final reportesEstudiantes = snapshot.data ?? {};
 
-              // Sección en dos columnas para web, una para mobile
-              if (isWeb)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 1,
-                      child: _buildSeccionDesempenio(isMobile),
+          return SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.all(isMobile ? 8 : (isTablet ? 12 : 16)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header mejorado - más compacto
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.analytics,
+                        size: isMobile ? 20 : 28,
+                        color: Colors.orange,
+                      ),
+                      SizedBox(width: isMobile ? 8 : 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Reportes y Estadísticas',
+                              style: TextStyle(
+                                fontSize: isMobile ? 16 : (isTablet ? 20 : 24),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              'Análisis del desempeño PLANEA',
+                              style: TextStyle(
+                                fontSize: isMobile ? 10 : 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: isMobile ? 12 : 20),
+
+                  // Tarjetas de estadísticas generales (Responsive)
+                  _buildEstadisticasGenerales(isWeb, isMobile, reportesEstudiantes),
+                  SizedBox(height: isMobile ? 16 : 24),
+
+                  // Sección en dos columnas para web, una para mobile
+                  if (isWeb)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 1,
+                          child: _buildSeccionDesempenio(isMobile, reportesEstudiantes),
+                        ),
+                        SizedBox(width: isMobile ? 12 : 20),
+                        Expanded(
+                          flex: 1,
+                          child: _buildSeccionCategorias(isMobile, reportesEstudiantes),
+                        ),
+                      ],
+                    )
+                  else
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildSeccionDesempenio(isMobile, reportesEstudiantes),
+                        SizedBox(height: isMobile ? 16 : 24),
+                        _buildSeccionCategorias(isMobile, reportesEstudiantes),
+                      ],
                     ),
-                    SizedBox(width: isMobile ? 12 : 20),
-                    Expanded(
-                      flex: 1,
-                      child: _buildSeccionCategorias(isMobile),
-                    ),
-                  ],
-                )
-              else
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildSeccionDesempenio(isMobile),
-                    SizedBox(height: isMobile ? 16 : 24),
-                    _buildSeccionCategorias(isMobile),
-                  ],
-                ),
-            ],
-          ),
-        ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildEstadisticasGenerales(bool isWeb, bool isMobile) {
-    final totalEstudiantes = _reportesEstudiantes.length;
-    final promedioGeneral = _reportesEstudiantes.isEmpty
+  Widget _buildEstadisticasGenerales(bool isWeb, bool isMobile, Map<String, StudentReportModel> reportesEstudiantes) {
+    final totalEstudiantes = reportesEstudiantes.length;
+    final promedioGeneral = reportesEstudiantes.isEmpty
         ? 0.0
-        : _reportesEstudiantes.values
+        : reportesEstudiantes.values
                 .map((r) => r.promedioGeneral)
                 .reduce((a, b) => a + b) /
-            _reportesEstudiantes.length;
+            reportesEstudiantes.length;
 
     // Responsive grid: 4 cols web, 2 cols mobile
     int crossAxisCount = isMobile ? 2 : (isWeb ? 4 : 2);
@@ -232,7 +215,7 @@ class _AdminReportesScreenState extends State<AdminReportesScreen> {
             ),
             _buildStatCard(
               title: 'Tests',
-              value: _reportesEstudiantes.values
+              value: reportesEstudiantes.values
                   .fold(0, (sum, r) => sum + r.totalTestsRealizados)
                   .toString(),
               icon: Icons.assignment,
@@ -253,7 +236,7 @@ class _AdminReportesScreenState extends State<AdminReportesScreen> {
   }
 
   /// Sección de Desempeño de Estudiantes
-  Widget _buildSeccionDesempenio(bool isMobile) {
+  Widget _buildSeccionDesempenio(bool isMobile, Map<String, StudentReportModel> reportesEstudiantes) {
     return Card(
       child: Padding(
         padding: EdgeInsets.all(isMobile ? 12 : 16),
@@ -306,7 +289,7 @@ class _AdminReportesScreenState extends State<AdminReportesScreen> {
             SizedBox(height: isMobile ? 12 : 16),
 
             // Tabla de estudiantes
-            _buildTablaEstudiantesCompacta(),
+            _buildTablaEstudiantesCompacta(reportesEstudiantes),
           ],
         ),
       ),
@@ -314,7 +297,7 @@ class _AdminReportesScreenState extends State<AdminReportesScreen> {
   }
 
   /// Sección de Desempeño por Categoría
-  Widget _buildSeccionCategorias(bool isMobile) {
+  Widget _buildSeccionCategorias(bool isMobile, Map<String, StudentReportModel> reportesEstudiantes) {
     return Card(
       child: Padding(
         padding: EdgeInsets.all(isMobile ? 12 : 16),
@@ -334,7 +317,7 @@ class _AdminReportesScreenState extends State<AdminReportesScreen> {
               int totalAciertos = 0;
               int totalReactivos = 0;
 
-              for (var reporte in _reportesEstudiantes.values) {
+              for (var reporte in reportesEstudiantes.values) {
                 if (reporte.desempenoPorCategoria.containsKey(categoria.id)) {
                   final perf = reporte.desempenoPorCategoria[categoria.id]!;
                   totalAciertos += perf.aciertos;
@@ -414,10 +397,9 @@ class _AdminReportesScreenState extends State<AdminReportesScreen> {
       ),
     );
   }
-
   /// Tabla compacta de estudiantes
-  Widget _buildTablaEstudiantesCompacta() {
-    final reportesFiltrados = _reportesEstudiantes.values.where((r) {
+  Widget _buildTablaEstudiantesCompacta(Map<String, StudentReportModel> reportesEstudiantes) {
+    final reportesFiltrados = reportesEstudiantes.values.where((r) {
       if (_filtroDesempenio == 'Todos') return true;
       return r.obtenerNivelDesempenio() == _filtroDesempenio;
     }).toList();
