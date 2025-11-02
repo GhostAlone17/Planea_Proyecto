@@ -23,9 +23,15 @@ class ReportsService {
 
       final gradosSet = <String>{};
       for (var doc in snapshot.docs) {
-        final grado = doc['gradoNombre'] as String?;
-        if (grado != null && grado.isNotEmpty) {
-          gradosSet.add(grado);
+        try {
+          final data = doc.data();
+          final grado = data['gradoNombre'] as String?;
+          if (grado != null && grado.isNotEmpty) {
+            gradosSet.add(grado);
+          }
+        } catch (e) {
+          // Ignorar documentos sin gradoNombre
+          print('   ⚠️ Documento ${doc.id} no tiene gradoNombre: $e');
         }
       }
 
@@ -136,50 +142,52 @@ class ReportsService {
 
       final reporteData = <String, dynamic>{};
 
+      // Primero, obtener estudiantes del grado
+      final estudiantesSnapshot = await _firestore
+          .collection('usuarios')
+          .where('gradoNombre', isEqualTo: gradoNombre)
+          .where('tipoUsuario', isEqualTo: 'alumno')
+          .get();
+
       for (var doc in categoriasSnapshot.docs) {
         final categoriaId = doc.id;
         final nombreCategoria = doc['nombre'] ?? 'Sin nombre';
 
-        // Obtener todos los intentos para esta categoría
-        final intentosSnapshot = await _firestore
-            .collection('studentAttempts')
-            .where('categoryId', isEqualTo: categoriaId)
-            .get();
+        int totalAciertos = 0;
+        int totalIntentos = 0;
+        final estudiantesInfo = <String, Map<String, dynamic>>{};
 
-        if (intentosSnapshot.docs.isNotEmpty) {
-          int totalAciertos = 0;
-          int totalIntentos = 0;
-          final estudiantesInfo = <String, Map<String, dynamic>>{};
+        // ✅ NUEVO: Iterar sobre estudiantes del grado y obtener su desempeño por categoría
+        for (var estudianteDoc in estudiantesSnapshot.docs) {
+          final nombreEstudiante = estudianteDoc.data()['nombre'] as String? ?? 'Sin nombre';
+          
+          final reporteRef = await _firestore
+              .collection('reportes_estudiantes')
+              .doc(estudianteDoc.id)
+              .get();
 
-          for (var intento in intentosSnapshot.docs) {
-            final data = intento.data();
-            final studentId = data['studentId'] as String?;
-            final aciertos = data['correctAnswers'] as int? ?? 0;
-            final total = data['totalQuestions'] as int? ?? 0;
+          if (reporteRef.exists) {
+            final reporteData = reporteRef.data() ?? {};
+            final desempenoPorCategoria = reporteData['desempenoPorCategoria'] as Map<String, dynamic>? ?? {};
+            
+            if (desempenoPorCategoria.containsKey(categoriaId)) {
+              final categoryPerformance = desempenoPorCategoria[categoriaId] as Map<String, dynamic>? ?? {};
+              final aciertos = categoryPerformance['aciertos'] as int? ?? 0;
+              final intentos = categoryPerformance['intentos'] as int? ?? 0;
 
-            totalAciertos += aciertos;
-            totalIntentos += total;
+              totalAciertos += aciertos;
+              totalIntentos += intentos;
 
-            if (studentId != null) {
-              if (!estudiantesInfo.containsKey(studentId)) {
-                estudiantesInfo[studentId] = {
-                  'aciertos': 0,
-                  'intentos': 0,
-                  'porcentaje': 0.0,
-                };
-              }
-              estudiantesInfo[studentId]!['aciertos'] += aciertos;
-              estudiantesInfo[studentId]!['intentos'] += total;
+              estudiantesInfo[nombreEstudiante] = {
+                'aciertos': aciertos,
+                'intentos': intentos,
+                'porcentaje': intentos > 0 ? (aciertos / intentos * 100) : 0.0,
+              };
             }
           }
+        }
 
-          // Calcular porcentajes
-          for (var entry in estudiantesInfo.entries) {
-            final aciertos = entry.value['aciertos'] as int;
-            final intentos = entry.value['intentos'] as int;
-            entry.value['porcentaje'] = intentos > 0 ? (aciertos / intentos * 100) : 0.0;
-          }
-
+        if (estudiantesInfo.isNotEmpty) {
           reporteData[nombreCategoria] = {
             'categoryId': categoriaId,
             'totalAciertos': totalAciertos,
@@ -217,24 +225,27 @@ class ReportsService {
         final nombre = doc['nombre'] as String? ?? 'Sin nombre';
         final email = doc['email'] as String? ?? '';
 
-        // Obtener intentos del estudiante
-        final intentosSnapshot = await _firestore
-            .collection('studentAttempts')
-            .where('studentId', isEqualTo: doc.id)
+        // ✅ NUEVO: Obtener datos del reporte del estudiante (estructura actualizada)
+        final reporteDoc = await _firestore
+            .collection('reportes_estudiantes')
+            .doc(doc.id)
             .get();
 
         int totalAciertos = 0;
         int totalIntentos = 0;
         int totalTests = 0;
+        double porcentaje = 0.0;
 
-        for (var intento in intentosSnapshot.docs) {
-          final data = intento.data();
-          totalAciertos += data['correctAnswers'] as int? ?? 0;
-          totalIntentos += data['totalQuestions'] as int? ?? 0;
-          totalTests++;
+        if (reporteDoc.exists) {
+          final data = reporteDoc.data() ?? {};
+          totalAciertos = data['totalAciertos'] as int? ?? 0;
+          totalIntentos = data['totalIntentos'] as int? ?? 0;
+          totalTests = data['totalTestsRealizados'] as int? ?? 0;
+          porcentaje = data['promedioGeneral'] as double? ?? 0.0;
+          print('   ✅ Reporte encontrado para $nombre: $totalTests tests, $totalAciertos aciertos');
+        } else {
+          print('   ⚠️ No hay reporte para $nombre');
         }
-
-        final porcentaje = totalIntentos > 0 ? (totalAciertos / totalIntentos * 100) : 0.0;
 
         estudiantes.add({
           'id': doc.id,
@@ -244,7 +255,6 @@ class ReportsService {
           'aciertos': totalAciertos,
           'total': totalIntentos,
           'porcentaje': porcentaje,
-          'intentos': intentosSnapshot.docs,
         });
       }
 
@@ -971,10 +981,10 @@ class ReportsService {
     for (var est in estudiantes) {
       sheet.getRangeByIndex(row, 1).setText(est['nombre'] as String);
       sheet.getRangeByIndex(row, 2).setText(est['email'] as String);
-      sheet.getRangeByIndex(row, 3).setText(est['totalTests'].toString());
-      sheet.getRangeByIndex(row, 4).setText(est['totalAciertos'].toString());
-      sheet.getRangeByIndex(row, 5).setText(est['totalPreguntas'].toString());
-      sheet.getRangeByIndex(row, 6).setText((est['promedio'] as double).toStringAsFixed(2));
+      sheet.getRangeByIndex(row, 3).setText((est['totalTests'] as int? ?? 0).toString());
+      sheet.getRangeByIndex(row, 4).setText((est['aciertos'] as int? ?? 0).toString());
+      sheet.getRangeByIndex(row, 5).setText((est['total'] as int? ?? 0).toString());
+      sheet.getRangeByIndex(row, 6).setText(((est['porcentaje'] as double? ?? 0.0)).toStringAsFixed(2));
 
       if (alternate) {
         for (int col = 1; col <= 6; col++) {
@@ -1222,7 +1232,8 @@ class ReportsService {
 
     // Datos Resumen
     sheet.getRangeByIndex(row, 1).setText('Total de Estudiantes');
-    sheet.getRangeByIndex(row, 2).setText(reporteData['totalEstudiantes'].toString());
+    final totalEstudiantes = reporteData['totalEstudiantes'] ?? 0;
+    sheet.getRangeByIndex(row, 2).setText(totalEstudiantes.toString());
     var cellStyle1 = sheet.getRangeByIndex(row, 2).cellStyle;
     cellStyle1.hAlign = HAlignType.center;
     cellStyle1.borders.all.lineStyle = LineStyle.thin;
@@ -1232,7 +1243,8 @@ class ReportsService {
     row++;
     
     sheet.getRangeByIndex(row, 1).setText('Tests Realizados');
-    sheet.getRangeByIndex(row, 2).setText(reporteData['totalTests'].toString());
+    final totalTests = reporteData['totalTests'] ?? 0;
+    sheet.getRangeByIndex(row, 2).setText(totalTests.toString());
     var cellStyle2 = sheet.getRangeByIndex(row, 2).cellStyle;
     cellStyle2.hAlign = HAlignType.center;
     cellStyle2.borders.all.lineStyle = LineStyle.thin;
@@ -1242,7 +1254,8 @@ class ReportsService {
     row++;
     
     sheet.getRangeByIndex(row, 1).setText('Promedio Global (%)');
-    sheet.getRangeByIndex(row, 2).setText((reporteData['promedioGeneral'] as double).toStringAsFixed(2));
+    final promedioGeneral = (reporteData['promedioGeneral'] as double?) ?? 0.0;
+    sheet.getRangeByIndex(row, 2).setText(promedioGeneral.toStringAsFixed(2));
     var cellStyle3 = sheet.getRangeByIndex(row, 2).cellStyle;
     cellStyle3.hAlign = HAlignType.center;
     cellStyle3.borders.all.lineStyle = LineStyle.thin;
@@ -1279,13 +1292,17 @@ class ReportsService {
     row++;
 
     // Datos tabla
-    final reportesPorGrado = reporteData['reportesPorGrado'] as Map<String, Map<String, dynamic>>;
+    final reportesPorGrado = reporteData['reportesPorGrado'] as Map<String, Map<String, dynamic>>? ?? {};
     bool alternate = false;
     for (final entry in reportesPorGrado.entries) {
       sheet.getRangeByIndex(row, 1).setText(entry.key);
-      sheet.getRangeByIndex(row, 2).setText(entry.value['totalEstudiantes'].toString());
-      sheet.getRangeByIndex(row, 3).setText(entry.value['totalTests'].toString());
-      sheet.getRangeByIndex(row, 4).setText((entry.value['promedioGeneral'] as double).toStringAsFixed(2));
+      final totalEst = entry.value['totalEstudiantes'] ?? 0;
+      final totalTst = entry.value['totalTests'] ?? 0;
+      final promGeneral = (entry.value['promedioGeneral'] as double?) ?? 0.0;
+      
+      sheet.getRangeByIndex(row, 2).setText(totalEst.toString());
+      sheet.getRangeByIndex(row, 3).setText(totalTst.toString());
+      sheet.getRangeByIndex(row, 4).setText(promGeneral.toStringAsFixed(2));
 
       if (alternate) {
         for (int col = 1; col <= 4; col++) {

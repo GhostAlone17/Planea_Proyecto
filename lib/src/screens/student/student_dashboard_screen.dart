@@ -157,7 +157,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth > 900;
+    
     return Scaffold(
+      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
         title: const Text(
           'PLANEA • Matemáticas',
@@ -211,178 +215,244 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       ),
       body: SingleChildScrollView(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Saludo personalizado - FULL WIDTH
+            // Saludo personalizado - Compacto y elegante
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              padding: EdgeInsets.symmetric(
+                horizontal: isDesktop ? 24 : 16,
+                vertical: isDesktop ? 20 : 14,
+              ),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [AppConstants.colorPrimario, AppConstants.colorPrimario.withOpacity(0.75)],
+                  colors: [
+                    AppConstants.colorPrimario, 
+                    AppConstants.colorPrimario.withOpacity(0.85)
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '¡Hola, $_studentName!',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: isDesktop ? 1200 : double.infinity),
+                  child: Row(
                     children: [
-                      const Icon(Icons.school, color: Colors.white70, size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Grado: $_gradoEstudiante',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.white70,
-                          fontWeight: FontWeight.w500,
+                      // Avatar
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.account_circle,
+                          size: 32,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      // Info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '¡Hola, $_studentName!',
+                              style: TextStyle(
+                                fontSize: isDesktop ? 18 : 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.school,
+                                  color: Colors.white.withOpacity(0.9),
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '$_gradoEstudiante • Prepárate para PLANEA',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.white.withOpacity(0.9),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    '📚 Prepárate para el examen PLANEA',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white70,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                ),
               ),
             ),
 
-            // Resumen de progreso general
-            if (_reporteEstudiante != null) ...[
-              Padding(
-                padding: const EdgeInsets.all(AppConstants.paddingLarge),
+            // Contenedor principal con ancho máximo
+            Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: isDesktop ? 1200 : double.infinity),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Tu Progreso General',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildProgressCard(
-                            title: 'Promedio',
-                            value: '${_reporteEstudiante!.promedioGeneral.toStringAsFixed(1)}%',
-                            icon: Icons.trending_up,
-                            color: Colors.blue,
-                          ),
+                    // Resumen de progreso general - Más compacto
+                    if (_reporteEstudiante != null) ...[
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          isDesktop ? 24 : 16,
+                          isDesktop ? 24 : 16,
+                          isDesktop ? 24 : 16,
+                          isDesktop ? 12 : 8,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildProgressCard(
-                            title: 'Tests',
-                            value: _reporteEstudiante!.totalTestsRealizados.toString(),
-                            icon: Icons.assignment,
-                            color: Colors.green,
-                          ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Tu Progreso',
+                              style: TextStyle(
+                                fontSize: isDesktop ? 16 : 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: _getColorForNivel(_reporteEstudiante!.obtenerNivelDesempenio()),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                _reporteEstudiante!.obtenerNivelDesempenio(),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildProgressCard(
-                            title: 'Aciertos',
-                            value: _reporteEstudiante!.totalAciertos.toString(),
-                            icon: Icons.check_circle,
-                            color: Colors.orange,
-                          ),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isDesktop ? 24 : 16,
                         ),
-                      ],
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _buildProgressCard(
+                                title: 'Promedio',
+                                value: '${_reporteEstudiante!.promedioGeneral.toStringAsFixed(0)}%',
+                                icon: Icons.trending_up,
+                                color: Colors.blue,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _buildProgressCard(
+                                title: 'Tests',
+                                value: _reporteEstudiante!.totalTestsRealizados.toString(),
+                                icon: Icons.assignment,
+                                color: Colors.green,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _buildProgressCard(
+                                title: 'Aciertos',
+                                value: _reporteEstudiante!.totalAciertos.toString(),
+                                icon: Icons.check_circle,
+                                color: Colors.orange,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
+                    // Categorías disponibles
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isDesktop ? 24 : 16,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        'Categorías Disponibles',
+                        style: TextStyle(
+                          fontSize: isDesktop ? 16 : 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    Chip(
-                      label: Text(_reporteEstudiante!.obtenerNivelDesempenio()),
-                      backgroundColor: _getColorForNivel(_reporteEstudiante!.obtenerNivelDesempenio()),
-                      labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+
+                    // Lista de categorías
+                    FutureBuilder<List<CategoryModel>>(
+                      future: _futureCategories,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return Padding(
+                            padding: EdgeInsets.all(isDesktop ? 40 : 30),
+                            child: const Center(child: CircularProgressIndicator()),
+                          );
+                        }
+
+                        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                          return Padding(
+                            padding: EdgeInsets.all(isDesktop ? 40 : 30),
+                            child: Center(
+                              child: Column(
+                                children: [
+                                  Icon(Icons.inbox_outlined, size: 60, color: Colors.grey.shade400),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'No hay categorías disponibles',
+                                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        // Ordenar alfabéticamente
+                        final categories = snapshot.data!..sort((a, b) => a.nombre.compareTo(b.nombre));
+
+                        return Padding(
+                          padding: EdgeInsets.symmetric(horizontal: isDesktop ? 24 : 16),
+                          child: ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: categories.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final category = categories[index];
+                              final categoryPerformance = _reporteEstudiante?.desempenoPorCategoria[category.id];
+                              return _buildCategoryListItem(
+                                context,
+                                category,
+                                categoryPerformance,
+                              );
+                            },
+                          ),
+                        );
+                      },
                     ),
+
+                    SizedBox(height: isDesktop ? 40 : 24),
                   ],
                 ),
               ),
-            ],
-
-            // Categorías disponibles
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.paddingLarge,
-                vertical: AppConstants.paddingMedium,
-              ),
-              child: Text(
-                'Categorías Disponibles',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
             ),
-
-            // Lista de categorías
-            FutureBuilder<List<CategoryModel>>(
-              future: _futureCategories,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.all(AppConstants.paddingLarge),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.all(AppConstants.paddingLarge),
-                    child: Center(
-                      child: Text(
-                        'No hay categorías disponibles',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ),
-                  );
-                }
-
-                // Ordenar alfabéticamente
-                final categories = snapshot.data!..sort((a, b) => a.nombre.compareTo(b.nombre));
-
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLarge),
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: categories.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 0),
-                    itemBuilder: (context, index) {
-                      final category = categories[index];
-                      final categoryPerformance = _reporteEstudiante?.desempenoPorCategoria[category.id];
-                      return _buildCategoryListItem(
-                        context,
-                        category,
-                        categoryPerformance,
-                      );
-                    },
-                  ),
-                );
-              },
-            ),
-
-            const SizedBox(height: AppConstants.paddingLarge),
           ],
         ),
       ),
@@ -395,42 +465,54 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     required IconData icon,
     required Color color,
   }) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 28, color: color),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 22, color: color),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              color: color,
             ),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 10,
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
             ),
-          ],
-        ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
 
-  /// Item de categoría compacto tipo lista (móvil)
+  /// Item de categoría estilo admin - Limpio y profesional
   Widget _buildCategoryListItem(
     BuildContext context,
     CategoryModel category,
@@ -440,92 +522,137 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final color = _getColorForPercentage(percentage);
     final isWideScreen = MediaQuery.of(context).size.width > 600;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _iniciarQuiz(context, category),
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: isWideScreen ? 20 : 12,
-            vertical: isWideScreen ? 12 : 10,
+    // Iconos según la categoría
+    IconData categoryIcon;
+    Color iconBgColor;
+    
+    switch (category.nombre.toLowerCase()) {
+      case 'estadística':
+      case 'estadistica':
+        categoryIcon = Icons.bar_chart_rounded;
+        iconBgColor = Colors.orange.shade100;
+        break;
+      case 'geometría':
+      case 'geometria':
+        categoryIcon = Icons.category_rounded;
+        iconBgColor = Colors.purple.shade100;
+        break;
+      case 'álgebra':
+      case 'algebra':
+        categoryIcon = Icons.functions_rounded;
+        iconBgColor = Colors.blue.shade100;
+        break;
+      default:
+        categoryIcon = Icons.quiz_rounded;
+        iconBgColor = Colors.teal.shade100;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border(bottom: BorderSide(color: Colors.grey.shade200, width: 1)),
-          ),
-          child: Row(
-            children: [
-              // Icono y nombre (lado izquierdo)
-              Expanded(
-                flex: isWideScreen ? 3 : 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      category.nombre,
-                      style: TextStyle(
-                        fontSize: isWideScreen ? 15 : 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _iniciarQuiz(context, category),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: EdgeInsets.all(isWideScreen ? 18 : 16),
+            child: Row(
+              children: [
+                // Icono grande estilo admin
+                Container(
+                  width: isWideScreen ? 56 : 52,
+                  height: isWideScreen ? 56 : 52,
+                  decoration: BoxDecoration(
+                    color: iconBgColor,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    categoryIcon,
+                    color: color,
+                    size: isWideScreen ? 28 : 26,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                
+                // Información de la categoría
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Nombre de categoría
+                      Text(
+                        category.nombre,
+                        style: TextStyle(
+                          fontSize: isWideScreen ? 16 : 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    // Barra de progreso inline
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(2),
-                      child: SizedBox(
-                        height: 3,
-                        child: LinearProgressIndicator(
-                          value: percentage / 100,
-                          backgroundColor: Colors.grey.shade200,
-                          valueColor: AlwaysStoppedAnimation(color),
+                      const SizedBox(height: 6),
+                      
+                      // Descripción con progreso
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              percentage > 0
+                                  ? 'Progreso: ${percentage.toStringAsFixed(0)}% completado'
+                                  : 'Comienza a practicar esta categoría',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      
+                      const SizedBox(height: 8),
+                      
+                      // Barra de progreso
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: SizedBox(
+                          height: 4,
+                          child: LinearProgressIndicator(
+                            value: percentage / 100,
+                            backgroundColor: Colors.grey.shade200,
+                            valueColor: AlwaysStoppedAnimation(color),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Porcentaje (lado derecho)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  '${percentage.toStringAsFixed(0)}%',
-                  style: TextStyle(
-                    fontSize: isWideScreen ? 12 : 11,
-                    fontWeight: FontWeight.bold,
-                    color: color,
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              // Botón compacto
-              Container(
-                decoration: BoxDecoration(
+                
+                const SizedBox(width: 12),
+                
+                // Flecha de acción estilo admin
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: isWideScreen ? 18 : 16,
                   color: color,
-                  borderRadius: BorderRadius.circular(6),
                 ),
-                child: InkWell(
-                  onTap: () => _iniciarQuiz(context, category),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    child: Icon(
-                      Icons.play_arrow,
-                      size: isWideScreen ? 20 : 18,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

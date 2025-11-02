@@ -476,7 +476,7 @@ class QuizService {
 
       if (answers == null || index == null) {
         // Si no hay en local, inicializar desde Firestore
-        await prefs.setStringList(_keySessionId(categoryId), [sessionId]);
+        await prefs.setString(_keySessionId(categoryId), sessionId);  // ✅ FIX: setString en lugar de setStringList
         await prefs.setStringList(_keyAnswers(categoryId), List.filled(sessionData['totalQuestions'], '').toList());
         await prefs.setInt(_keyIndex(categoryId), 0);
         
@@ -683,9 +683,12 @@ class QuizService {
       if (userId == null) throw Exception('Usuario no autenticado');
 
       final prefs = await SharedPreferences.getInstance();
-      final answers = List<String>.from(
-        prefs.getStringList(_keyAnswers(progress.categoryId)) ?? [],
-      );
+      
+      // Obtener respuestas existentes y convertir a List mutable
+      final savedAnswers = prefs.getStringList(_keyAnswers(progress.categoryId));
+      final answers = savedAnswers != null 
+          ? List<String>.from(savedAnswers.map((e) => e.toString()))
+          : <String>[];
 
       if (answers.isEmpty) {
         answers.addAll(List.filled(progress.total, ''));
@@ -719,8 +722,13 @@ class QuizService {
         }
       }
 
+      // ✅ FIX: Solo incrementar si no es la última pregunta
       final nextIndex = progress.currentIndex + 1;
-      await prefs.setInt(_keyIndex(progress.categoryId), nextIndex);
+      
+      // Solo guardar el nuevo índice si no excede el total
+      if (nextIndex <= progress.total) {
+        await prefs.setInt(_keyIndex(progress.categoryId), nextIndex);
+      }
 
       return progress.copyWith(
         currentIndex: nextIndex,
@@ -753,18 +761,25 @@ class QuizService {
 
       // Calcular puntaje
       int score = 0;
-      final answersData = <int, int>{};
+      final answersData = <String, dynamic>{};  // ✅ FIX: Firestore necesita Map<String, dynamic>
 
+      print('🔍 Calculando puntaje...');
       for (int i = 0; i < order.length; i++) {
         final q = questions[order[i]];
         final ans = answers[i].isEmpty ? null : int.tryParse(answers[i]);
 
-        answersData[i] = ans ?? -1;
+        answersData[i.toString()] = ans ?? -1;  // ✅ FIX: Convertir índice a String
 
+        // ✅ FIX CRÍTICO: ans ya contiene el índice REAL de la opción seleccionada
+        // Comparar directamente con indiceCorrecto
         if (ans != null && ans == q.indiceCorrecto) {
           score++;
+          print('   ✅ Pregunta $i: Correcta (seleccionó índice $ans, correcto es ${q.indiceCorrecto})');
+        } else {
+          print('   ❌ Pregunta $i: Incorrecta (seleccionó índice $ans, correcto es ${q.indiceCorrecto})');
         }
       }
+      print('📊 Puntaje final: $score de ${order.length}');
 
       // Finalizar sesión en Firestore
       final endTime = DateTime.now();

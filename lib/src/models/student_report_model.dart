@@ -76,9 +76,22 @@ class StudentReportModel {
       totalIntentos: map['totalIntentos'] ?? 0,
       promedioGeneral: (map['promedioGeneral'] ?? 0.0).toDouble(),
       desempenoPorCategoria: desempenio,
-      fechaUltimoTest: DateTime.parse(map['fechaUltimoTest']),
-      fechaReporte: DateTime.parse(map['fechaReporte']),
+      fechaUltimoTest: _parseDateTime(map['fechaUltimoTest']),
+      fechaReporte: _parseDateTime(map['fechaReporte']),
     );
+  }
+
+  /// Helper para parsear DateTime desde String o Timestamp
+  static DateTime _parseDateTime(dynamic value) {
+    if (value == null) return DateTime.now();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.parse(value);
+    // Si es Timestamp de Firestore
+    try {
+      return (value as dynamic).toDate() as DateTime;
+    } catch (e) {
+      return DateTime.now();
+    }
   }
 }
 
