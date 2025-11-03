@@ -49,6 +49,7 @@ class AuthenticationService extends ChangeNotifier {
     required String displayName,
     required String tipoUsuario, // 'alumno' o 'maestro'
     String? gradoNombre, // Grado para alumnos: 'Primaria', 'Secundaria', 'Preparatoria'
+    String? gradoId, // ✨ NUEVO: Año específico (opcional, se genera automático si no se proporciona)
     bool mantenerSesion = false,
   }) async {
     try {
@@ -73,6 +74,27 @@ class AuthenticationService extends ChangeNotifier {
         // ✨ NUEVA LÓGICA: Maestros requieren aprobación
         final estaAprobado = tipoUsuario == 'alumno' ? true : false;
         
+        // ✅ ARREGLO: Usar gradoId proporcionado o generar por defecto
+        String? finalGradoId = gradoId; // Usar el proporcionado si existe
+        
+        // Si no se proporcionó gradoId, generar por defecto basado en gradoNombre
+        if (tipoUsuario == 'alumno' && gradoNombre != null && finalGradoId == null) {
+          // Mapeo por defecto: usar el grado más alto de cada nivel
+          switch (gradoNombre.toLowerCase()) {
+            case 'primaria':
+              finalGradoId = '6P'; // Grado por defecto: 6° de Primaria
+              break;
+            case 'secundaria':
+              finalGradoId = '3S'; // Grado por defecto: 3° de Secundaria
+              break;
+            case 'preparatoria':
+              finalGradoId = '12EMS'; // Grado por defecto: 3° de Preparatoria (12EMS)
+              break;
+          }
+        }
+        
+        print('✅ Autoregistro: gradoNombre="$gradoNombre" → gradoId="$finalGradoId"');
+        
         await FirebaseFirestore.instance
             .collection('usuarios')
             .doc(userCredential.user!.uid)
@@ -86,6 +108,7 @@ class AuthenticationService extends ChangeNotifier {
           'fechaRegistro': FieldValue.serverTimestamp(),
           'fechaSolicitud': tipoUsuario == 'maestro' ? FieldValue.serverTimestamp() : null,
           'gradoNombre': tipoUsuario == 'alumno' ? gradoNombre : null, // ✨ NUEVO
+          'gradoId': tipoUsuario == 'alumno' ? finalGradoId : null, // ✅ ARREGLO: Usar finalGradoId
         });
       }
 

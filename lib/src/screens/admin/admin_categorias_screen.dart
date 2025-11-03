@@ -11,26 +11,111 @@ class AdminCategoriasScreen extends StatefulWidget {
 }
 
 class _AdminCategoriasScreenState extends State<AdminCategoriasScreen> {
-  late List<CategoryModelV2> _categorias;
+  List<CategoryModelV2> _categorias = [];
   late AdminService _adminService;
-  late Map<String, int> _reactivosPorCategoria;
+  Map<String, int> _reactivosPorCategoria = {};
+  Map<String, Map<String, dynamic>> _estadisticasPorCategoria = {};
   bool _cargando = true;
 
   @override
   void initState() {
     super.initState();
     _adminService = AdminService();
-    _categorias = CategoryModelV2.categoriasDefault();
-    _reactivosPorCategoria = {};
-    _cargarEstadisticas();
+    _cargarDatos();
   }
 
-  Future<void> _cargarEstadisticas() async {
-    final stats = await _adminService.obtenerReactivosPorCategoria();
-    setState(() {
-      _reactivosPorCategoria = stats;
-      _cargando = false;
-    });
+  Future<void> _cargarDatos() async {
+    try {
+      // Cargar categorías desde Firestore
+      final categoriasSnapshot = await _adminService.obtenerCategorias();
+      
+      // Si no hay categorías en Firestore, usar las default
+      if (categoriasSnapshot.isEmpty) {
+        _categorias = CategoryModelV2.categoriasDefault();
+      } else {
+        _categorias = categoriasSnapshot;
+      }
+
+      // Cargar estadísticas de reactivos
+      final stats = await _adminService.obtenerReactivosPorCategoria();
+      
+      // OPTIMIZACIÓN: Cargar datos una sola vez y reutilizarlos
+      final reportes = await _adminService.obtenerTodosLosReportes();
+      final reactivos = await _adminService.obtenerReactivos();
+      
+      // Calcular estadísticas para todas las categorías
+      for (var categoria in _categorias) {
+        _estadisticasPorCategoria[categoria.id] = _calcularEstadisticasCategoria(
+          categoria.id,
+          reportes,
+          reactivos,
+        );
+      }
+
+      setState(() {
+        _reactivosPorCategoria = stats;
+        _cargando = false;
+      });
+    } catch (e) {
+      print('Error cargando datos de categorías: $e');
+      // Si hay error, usar categorías default
+      setState(() {
+        _categorias = CategoryModelV2.categoriasDefault();
+        _cargando = false;
+      });
+    }
+  }
+
+  Map<String, dynamic> _calcularEstadisticasCategoria(
+    String categoriaId,
+    List reportes,
+    List reactivos,
+  ) {
+    try {
+      // Calcular estadísticas de esta categoría desde los reportes
+      int totalAciertos = 0;
+      int totalIntentos = 0;
+      int estudiantesConTests = 0;
+
+      for (var reporte in reportes) {
+        if (reporte.desempenoPorCategoria.containsKey(categoriaId)) {
+          final perf = reporte.desempenoPorCategoria[categoriaId]!;
+          totalAciertos += (perf.aciertos as num).toInt();
+          totalIntentos += (perf.intentos as num).toInt();
+          // Contar cuántos estudiantes han realizado tests en esta categoría
+          if (perf.intentos > 0) {
+            estudiantesConTests++;
+          }
+        }
+      }
+
+      // Calcular porcentaje de acierto promedio
+      final aciertoPromedio = totalIntentos > 0
+          ? (totalAciertos / totalIntentos * 100)
+          : 0.0;
+
+      // Obtener dificultad promedio de los reactivos de esta categoría
+      final reactivosCategoria = reactivos.where((r) => r.categoryId == categoriaId && r.activa).toList();
+      
+      final dificultadPromedio = reactivosCategoria.isNotEmpty
+          ? reactivosCategoria.map((r) => r.dificultad).reduce((a, b) => a + b) / reactivosCategoria.length
+          : 0.0;
+
+      return {
+        'testsRealizados': estudiantesConTests,
+        'totalIntentos': totalIntentos,
+        'aciertoPromedio': aciertoPromedio,
+        'dificultadPromedio': dificultadPromedio,
+      };
+    } catch (e) {
+      print('Error calculando estadísticas de categoría: $e');
+      return {
+        'testsRealizados': 0,
+        'totalIntentos': 0,
+        'aciertoPromedio': 0.0,
+        'dificultadPromedio': 0.0,
+      };
+    }
   }
 
   @override
@@ -158,6 +243,11 @@ class _AdminCategoriasScreenState extends State<AdminCategoriasScreen> {
 
   /// Construye una tarjeta de categoría (lista horizontal)
   Widget _buildCategoryCard(CategoryModelV2 categoria, int numReactivos) {
+    // Obtener icono y color según la categoría
+    final iconData = _getCategoryIcon(categoria.nombre);
+    final iconBgColor = _getCategoryIconBackground(categoria.nombre);
+    final iconColor = _getCategoryIconColor(categoria.nombre);
+
     return Card(
       elevation: 2,
       child: InkWell(
@@ -171,12 +261,13 @@ class _AdminCategoriasScreenState extends State<AdminCategoriasScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.purple.withOpacity(0.1),
+                  color: iconBgColor,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(
-                  categoria.icono,
-                  style: const TextStyle(fontSize: 32),
+                child: Icon(
+                  iconData,
+                  color: iconColor,
+                  size: 32,
                 ),
               ),
               const SizedBox(width: 16),
@@ -249,13 +340,138 @@ class _AdminCategoriasScreenState extends State<AdminCategoriasScreen> {
     );
   }
 
+  /// Obtener icono de Material según la categoría
+  IconData _getCategoryIcon(String categoryName) {
+    switch (categoryName.toLowerCase()) {
+      case 'estadística':
+      case 'estadistica':
+        return Icons.bar_chart_rounded;
+      case 'geometría':
+      case 'geometria':
+        return Icons.category_rounded;
+      case 'álgebra':
+      case 'algebra':
+        return Icons.functions_rounded;
+      case 'trigonometría':
+      case 'trigonometria':
+        return Icons.architecture_rounded;
+      case 'cálculo':
+      case 'calculo':
+        return Icons.trending_up_rounded;
+      case 'lógica matemática':
+      case 'logica matematica':
+      case 'lógica':
+      case 'logica':
+        return Icons.psychology_rounded;
+      default:
+        return Icons.quiz_rounded;
+    }
+  }
+
+  /// Obtener color de fondo del icono según la categoría
+  Color _getCategoryIconBackground(String categoryName) {
+    switch (categoryName.toLowerCase()) {
+      case 'estadística':
+      case 'estadistica':
+        return Colors.orange.shade100;
+      case 'geometría':
+      case 'geometria':
+        return Colors.purple.shade100;
+      case 'álgebra':
+      case 'algebra':
+        return Colors.blue.shade100;
+      case 'trigonometría':
+      case 'trigonometria':
+        return Colors.pink.shade100;
+      case 'cálculo':
+      case 'calculo':
+        return Colors.green.shade100;
+      case 'lógica matemática':
+      case 'logica matematica':
+      case 'lógica':
+      case 'logica':
+        return Colors.teal.shade100;
+      default:
+        return Colors.grey.shade100;
+    }
+  }
+
+  /// Obtener color del icono según la categoría
+  Color _getCategoryIconColor(String categoryName) {
+    switch (categoryName.toLowerCase()) {
+      case 'estadística':
+      case 'estadistica':
+        return Colors.orange.shade700;
+      case 'geometría':
+      case 'geometria':
+        return Colors.purple.shade700;
+      case 'álgebra':
+      case 'algebra':
+        return Colors.blue.shade700;
+      case 'trigonometría':
+      case 'trigonometria':
+        return Colors.pink.shade700;
+      case 'cálculo':
+      case 'calculo':
+        return Colors.green.shade700;
+      case 'lógica matemática':
+      case 'logica matematica':
+      case 'lógica':
+      case 'logica':
+        return Colors.teal.shade700;
+      default:
+        return Colors.grey.shade700;
+    }
+  }
+
   void _mostrarDetallesCategoria(CategoryModelV2 categoria, int numReactivos) {
+    // Obtener estadísticas de esta categoría
+    final stats = _estadisticasPorCategoria[categoria.id] ?? {
+      'testsRealizados': 0,
+      'totalIntentos': 0,
+      'aciertoPromedio': 0.0,
+      'dificultadPromedio': 0.0,
+    };
+
+    final estudiantesConTests = stats['testsRealizados'] as int;
+    final totalIntentos = stats['totalIntentos'] as int;
+    final aciertoPromedio = stats['aciertoPromedio'] as double;
+    final dificultadPromedio = stats['dificultadPromedio'] as double;
+
+    // Convertir dificultad a texto
+    String dificultadTexto;
+    if (dificultadPromedio >= 7) {
+      dificultadTexto = 'Difícil';
+    } else if (dificultadPromedio >= 4) {
+      dificultadTexto = 'Media';
+    } else if (dificultadPromedio > 0) {
+      dificultadTexto = 'Fácil';
+    } else {
+      dificultadTexto = 'N/A';
+    }
+
+    // Obtener icono y colores de la categoría
+    final iconData = _getCategoryIcon(categoria.nombre);
+    final iconBgColor = _getCategoryIconBackground(categoria.nombre);
+    final iconColor = _getCategoryIconColor(categoria.nombre);
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Row(
           children: [
-            Text(categoria.icono, style: const TextStyle(fontSize: 32)),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: iconBgColor,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                iconData,
+                color: iconColor,
+                size: 28,
+              ),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(categoria.nombre),
@@ -302,10 +518,20 @@ class _AdminCategoriasScreenState extends State<AdminCategoriasScreen> {
                     ),
                     const SizedBox(height: 8),
                     _buildStatRow('Reactivos:', numReactivos.toString()),
-                    _buildStatRow('Tests realizados:', '0'),
-                    _buildStatRow('Acierto promedio:', '0%'),
-                    _buildStatRow('Dificultad promedio:', 'Media'),
+                    _buildStatRow('Estudiantes:', '$estudiantesConTests ${estudiantesConTests == 1 ? "ha practicado" : "han practicado"}'),
+                    _buildStatRow('Total intentos:', totalIntentos.toString()),
+                    _buildStatRow('Acierto promedio:', '${aciertoPromedio.toStringAsFixed(1)}%'),
+                    _buildStatRow('Dificultad promedio:', dificultadTexto),
                   ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '* Los porcentajes se calculan sobre todos los intentos realizados',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey,
+                  fontStyle: FontStyle.italic,
                 ),
               ),
             ],

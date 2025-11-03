@@ -3,9 +3,15 @@ import 'package:provider/provider.dart';
 import '../../services/authentication_service.dart';
 import '../user_profile_modal.dart';
 import '../cambiar_password_screen.dart';
+import '../admin/admin_estudiantes_screen.dart';
+import '../admin/admin_reactivos_screen.dart';
+import '../admin/admin_categorias_screen.dart';
+import '../admin/admin_reportes_screen.dart';
+import '../admin/admin_maestros_validation_screen.dart';
 
 /// Dashboard para Maestros
-/// Permite ver reportes del desempeño de sus estudiantes
+/// Permite acceder a las mismas funcionalidades que el admin
+/// (luego se restringirán según las necesidades)
 class TeacherDashboard extends StatefulWidget {
   const TeacherDashboard({Key? key}) : super(key: key);
 
@@ -14,10 +20,6 @@ class TeacherDashboard extends StatefulWidget {
 }
 
 class _TeacherDashboardState extends State<TeacherDashboard> {
-  @override
-  void initState() {
-    super.initState();
-  }
 
   void _logout() {
     showDialog(
@@ -173,56 +175,73 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
 
             // Opciones del dashboard
             Text(
-              'Reportes y Monitoreo',
+              'Gestión del Sistema',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 16),
 
-            // Card: Desempeño de Estudiantes
+            // Card: Gestión de Alumnos
             _buildTeacherCard(
-              icon: Icons.trending_up,
-              title: '📊 Desempeño de Estudiantes',
-              description: 'Ver progreso y calificaciones de tus alumnos',
+              icon: Icons.people,
+              title: 'Gestión de Alumnos',
+              description: 'Ver y deshabilitar alumnos (sin editar ni eliminar)',
               color: Colors.blue,
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Esta funcionalidad estará disponible pronto'),
-                  ),
-                );
-              },
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AdminEstudiantesScreen()),
+              ),
             ),
             const SizedBox(height: 16),
 
-            // Card: Reportes por Categoría
+            // Card: Reactivos
             _buildTeacherCard(
-              icon: Icons.assessment,
-              title: '📈 Reportes por Categoría',
-              description: 'Análisis de desempeño en Álgebra, Geometría, etc.',
-              color: Colors.green,
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Esta funcionalidad estará disponible pronto'),
-                  ),
-                );
-              },
+              icon: Icons.quiz,
+              title: 'Reactivos',
+              description: 'Crear y editar preguntas del examen',
+              color: Colors.orange,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AdminReactivosScreen()),
+              ),
             ),
             const SizedBox(height: 16),
 
-            // Card: Estadísticas Generales
+            // Card: Categorías
+            _buildTeacherCard(
+              icon: Icons.category,
+              title: 'Categorías',
+              description: 'Gestionar temas: Álgebra, Geometría, etc.',
+              color: Colors.purple,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AdminCategoriasScreen()),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Card: Reportes
             _buildTeacherCard(
               icon: Icons.bar_chart,
-              title: '📉 Estadísticas Generales',
-              description: 'Resumen del desempeño del grupo',
-              color: Colors.purple,
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Esta funcionalidad estará disponible pronto'),
-                  ),
-                );
-              },
+              title: 'Reportes',
+              description: 'Ver desempeño y estadísticas de estudiantes',
+              color: Colors.teal,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AdminReportesScreen()),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Card: Validar Maestros
+            _buildTeacherCard(
+              icon: Icons.verified_user,
+              title: 'Validar Maestros',
+              description: 'Aprobar solicitudes de nuevos maestros',
+              color: Colors.red,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AdminMaestrosValidationScreen()),
+              ),
             ),
             const SizedBox(height: 32),
 
@@ -240,7 +259,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Los reportes se actualizan en tiempo real con las respuestas de los estudiantes.',
+                      'Todos los cambios se guardan automáticamente en Firestore.',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.blue.shade700,

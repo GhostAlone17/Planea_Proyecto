@@ -11,6 +11,77 @@ import 'password_service.dart';
 class AdminService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // ==================== HELPERS ====================
+
+  /// Infiere el gradoNombre completo basándose en el gradoId
+  /// Ejemplos: 
+  /// - '6P' → 'Primaria'
+  /// - '3S' → 'Secundaria' 
+  /// - '12EMS' → 'Preparatoria'
+  /// - '1Prep' → 'Preparatoria'
+  String inferirGradoNombre(String gradoId) {
+    // Eliminar espacios y convertir a mayúsculas para comparación
+    final id = gradoId.trim().toUpperCase();
+    
+    // Preparatoria: contiene "PREP" o "EMS"
+    if (id.contains('PREP') || id.contains('EMS')) {
+      return 'Preparatoria';
+    }
+    
+    // Primaria: termina en "P" (pero no es "PREP")
+    if (id.endsWith('P')) {
+      return 'Primaria';
+    }
+    
+    // Secundaria: termina en "S" (pero no contiene "EMS")
+    if (id.endsWith('S')) {
+      return 'Secundaria';
+    }
+    
+    // Por defecto, retornar vacío (se manejará como caso especial)
+    return '';
+  }
+
+  /// Extrae el número de grado del gradoId
+  /// Ejemplos:
+  /// - '6P' → 6
+  /// - '3S' → 3
+  /// - '12EMS' → 12 (o 3 si queremos el año de preparatoria)
+  /// - '1Prep' → 1
+  int? extraerNumeroGrado(String gradoId) {
+    // Eliminar espacios
+    final id = gradoId.trim();
+    
+    // Extraer todos los dígitos
+    final digitos = id.replaceAll(RegExp(r'[^0-9]'), '');
+    
+    if (digitos.isEmpty) return null;
+    
+    return int.tryParse(digitos);
+  }
+
+  /// Genera una descripción completa del grado
+  /// Ejemplos:
+  /// - '6P' → '6° de Primaria'
+  /// - '3S' → '3° de Secundaria'
+  /// - '12EMS' → '3° de Preparatoria'
+  String generarDescripcionGrado(String gradoId) {
+    final nivel = inferirGradoNombre(gradoId);
+    final numero = extraerNumeroGrado(gradoId);
+    
+    if (nivel.isEmpty || numero == null) {
+      return gradoId; // Fallback al ID original
+    }
+    
+    // Para EMS, convertir 10→1°, 11→2°, 12→3°
+    int gradoMostrar = numero;
+    if (gradoId.toUpperCase().contains('EMS')) {
+      gradoMostrar = numero - 9; // 10→1, 11→2, 12→3
+    }
+    
+    return '$gradoMostrar° de $nivel';
+  }
+
   // ==================== ESTUDIANTES ====================
 
   /// Obtener lista de todos los estudiantes
@@ -45,12 +116,18 @@ class AdminService {
             password: PasswordService.DEFAULT_PASSWORD,
           );
 
+      // ✅ AUTOMÁTICO: Inferir gradoNombre desde gradoId
+      final gradoNombre = inferirGradoNombre(gradoId);
+      
+      print('✅ Creando estudiante: gradoId="$gradoId" → gradoNombre="$gradoNombre"');
+
       final nuevoEstudiante = UserModel(
         id: userCredential.user!.uid,
         nombre: nombre,
         email: email,
         tipoUsuario: 'alumno',
         gradoId: gradoId,
+        gradoNombre: gradoNombre.isNotEmpty ? gradoNombre : null, // Solo establecer si se infirió correctamente
         fechaRegistro: DateTime.now(),
         activo: true,
         roles: roles,
@@ -76,9 +153,15 @@ class AdminService {
     bool? activo,
   }) async {
     try {
+      // ✅ AUTOMÁTICO: Inferir gradoNombre desde gradoId
+      final gradoNombre = inferirGradoNombre(gradoId);
+      
+      print('✅ Actualizando estudiante: gradoId="$gradoId" → gradoNombre="$gradoNombre"');
+      
       final updateData = <String, dynamic>{
         'nombre': nombre,
         'gradoId': gradoId,
+        'gradoNombre': gradoNombre.isNotEmpty ? gradoNombre : null, // Actualizar también gradoNombre
       };
       
       if (activo != null) {
@@ -318,17 +401,44 @@ class AdminService {
 
   // ==================== CATEGORÍAS ====================
 
-  /// Obtener todas las categorías predefinidas
-  /// (Las categorías son estáticas, solo lectura)
-  List<CategoryModelV2> obtenerCategorias() {
-    return CategoryModelV2.categoriasDefault();
+  /// Obtener todas las categorías desde Firestore
+  /// Si no hay categorías en Firestore, devuelve las predefinidas
+  Future<List<CategoryModelV2>> obtenerCategorias() async {
+    try {
+      final snapshot = await _firestore.collection('categorias').get();
+      
+      if (snapshot.docs.isEmpty) {
+        // Si no hay categorías en Firestore, usar las default
+        return CategoryModelV2.categoriasDefault();
+      }
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return CategoryModelV2(
+          id: doc.id,
+          nombre: data['nombre'] as String? ?? '',
+          descripcion: data['descripcion'] as String? ?? '',
+          icono: data['icono'] as String? ?? '📐',
+          orden: data['orden'] as int? ?? 0,
+          activa: data['activa'] as bool? ?? true,
+          fechaCreacion: data['fechaCreacion'] != null 
+              ? (data['fechaCreacion'] as Timestamp).toDate()
+              : DateTime.now(),
+        );
+      }).toList();
+    } catch (e) {
+      print('Error al obtener categorías: $e');
+      // En caso de error, devolver categorías default
+      return CategoryModelV2.categoriasDefault();
+    }
   }
 
   /// Obtener número de reactivos por categoría
   Future<Map<String, int>> obtenerReactivosPorCategoria() async {
     try {
       final result = <String, int>{};
-      final categorias = CategoryModelV2.categoriasDefault();
+      // Usar categorías desde Firestore
+      final categorias = await obtenerCategorias();
 
       for (var categoria in categorias) {
         final snapshot = await _firestore
@@ -517,6 +627,53 @@ class AdminService {
       print('✅ Migración completada');
     } catch (e) {
       print('❌ Error en migración: $e');
+    }
+  }
+
+  /// Migra usuarios que no tienen gradoNombre basándose en su gradoId
+  Future<void> migrarGradoNombreUsuarios() async {
+    try {
+      print('📊 Iniciando migración de gradoNombre para usuarios...');
+      
+      final snapshot = await _firestore
+          .collection('usuarios')
+          .where('tipoUsuario', isEqualTo: 'alumno')
+          .get();
+
+      int actualizados = 0;
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final gradoNombre = data['gradoNombre'] as String?;
+        final gradoId = data['gradoId'] as String?;
+        final nombre = data['nombre'] as String? ?? 'Sin nombre';
+
+        // Solo actualizar si no tiene gradoNombre pero sí tiene gradoId
+        if ((gradoNombre == null || gradoNombre.isEmpty) && gradoId != null && gradoId.isNotEmpty) {
+          String nuevoGradoNombre = '';
+
+          // Inferir gradoNombre basado en gradoId
+          if (gradoId.endsWith('P') && gradoId != 'Prep' && !gradoId.contains('EMS')) {
+            nuevoGradoNombre = 'Primaria';
+          } else if (gradoId.endsWith('S') && !gradoId.contains('EMS')) {
+            nuevoGradoNombre = 'Secundaria';
+          } else if (gradoId.contains('Prep') || gradoId.contains('EMS')) {
+            nuevoGradoNombre = 'Preparatoria';
+          }
+
+          if (nuevoGradoNombre.isNotEmpty) {
+            await _firestore.collection('usuarios').doc(doc.id).update({
+              'gradoNombre': nuevoGradoNombre,
+            });
+            actualizados++;
+            print('✅ Actualizado $nombre (gradoId: $gradoId) -> gradoNombre: $nuevoGradoNombre');
+          }
+        }
+      }
+
+      print('✅ Migración completada. Usuarios actualizados: $actualizados');
+    } catch (e) {
+      print('❌ Error en migración de gradoNombre: $e');
     }
   }
 }

@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/admin_service.dart';
 import '../../models/user_model.dart';
 import '../../config/app_constants.dart';
 
 /// Pantalla para gestionar estudiantes (padrón)
 /// Permite:
-/// - Crear nuevos estudiantes
+/// - Crear nuevos estudiantes (solo admin)
 /// - Ver lista de estudiantes
-/// - Editar estudiantes
-/// - Eliminar estudiantes
+/// - Editar estudiantes (solo admin)
+/// - Eliminar estudiantes (solo admin)
+/// - Deshabilitar/Habilitar estudiantes (admin y maestro)
+/// 
+/// SI ES MAESTRO:
+/// - Solo ve alumnos (no maestros)
+/// - No puede editar ni eliminar
+/// - Solo puede deshabilitar/habilitar
 class AdminEstudiantesScreen extends StatefulWidget {
   const AdminEstudiantesScreen({Key? key}) : super(key: key);
 
@@ -19,12 +27,13 @@ class AdminEstudiantesScreen extends StatefulWidget {
 class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
   final _searchController = TextEditingController();
   late AdminService _adminService;
+  bool _isMaestro = false;
   
   // Variables de filtro
   String _filtroGrado = 'Todos';
   String _ordenarPor = 'nombre'; // nombre, fecha, estado
   String _filtroEstado = 'todos'; // activos, deshabilitados, todos - CAMBIO: inicia en 'todos'
-  String _tipoUsuario = 'todos'; // estudiantes, maestros, todos
+  String _tipoUsuario = 'estudiantes'; // estudiantes, maestros, todos (maestro solo ve estudiantes)
   
   final Map<String, List<Map<String, String>>> _gradosPorNivel = {
     'Primaria': [
@@ -44,7 +53,36 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
   void initState() {
     super.initState();
     _adminService = AdminService();
+    _detectarTipoUsuario();
     _searchController.addListener(_filtrarEstudiantes);
+  }
+
+  /// Detectar si el usuario actual es maestro
+  Future<void> _detectarTipoUsuario() async {
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId == null) return;
+
+      final doc = await FirebaseFirestore.instance
+          .collection('usuarios')
+          .doc(userId)
+          .get();
+
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>;
+        final tipoUsuario = data['tipoUsuario'] as String?;
+        
+        setState(() {
+          _isMaestro = tipoUsuario == 'maestro';
+          // Si es maestro, forzar filtro a solo estudiantes
+          if (_isMaestro) {
+            _tipoUsuario = 'estudiantes';
+          }
+        });
+      }
+    } catch (e) {
+      print('Error detectando tipo de usuario: $e');
+    }
   }
 
   void _filtrarEstudiantes() {
@@ -113,13 +151,29 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
   }
 
   /// Traduce el código de grado a su nombre completo
-  String _traducirGrado(String? gradoId) {
-    if (gradoId == null) return 'N/A';
+  String _traducirGrado(String? gradoId, {String? gradoNombre}) {
+    // Si tiene gradoNombre, usarlo y mejorar el formato
+    if (gradoNombre != null && gradoNombre.isNotEmpty && gradoNombre != 'N/A') {
+      // Si es "Secundaria", mostrar "3° de Secundaria" ya que es el único grado que manejamos
+      if (gradoNombre.toLowerCase() == 'secundaria') {
+        return '3° de Secundaria';
+      }
+      return gradoNombre;
+    }
     
+    // Si no hay gradoId, retornar N/A
+    if (gradoId == null || gradoId.isEmpty) return 'N/A';
+    
+    // Buscar el gradoId en los grados disponibles
     final grados = AppConstants.obtenerTodosGrados();
     for (var grado in grados) {
       if (grado['valor'] == gradoId) {
-        return grado['label'] ?? gradoId;
+        final label = grado['label'] ?? gradoId;
+        // Aplicar la misma lógica para gradoId
+        if (label.toLowerCase() == 'secundaria') {
+          return '3° de Secundaria';
+        }
+        return label;
       }
     }
     return gradoId;
@@ -143,9 +197,15 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
             child: Divider(),
           ),
           // Primaria
-          const Padding(
-            padding: EdgeInsets.only(left: 16.0, top: 8.0, bottom: 8.0),
-            child: Text('📚 Primaria', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
+          Padding(
+            padding: const EdgeInsets.only(left: 16.0, top: 8.0, bottom: 8.0),
+            child: Row(
+              children: const [
+                Icon(Icons.menu_book_rounded, size: 16, color: Colors.grey),
+                SizedBox(width: 6),
+                Text('Primaria', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
+              ],
+            ),
           ),
           ..._gradosPorNivel['Primaria']!.map((grado) {
             return SimpleDialogOption(
@@ -164,9 +224,15 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
             child: Divider(),
           ),
           // Secundaria
-          const Padding(
-            padding: EdgeInsets.only(left: 16.0, top: 8.0, bottom: 8.0),
-            child: Text('🎓 Secundaria', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
+          Padding(
+            padding: const EdgeInsets.only(left: 16.0, top: 8.0, bottom: 8.0),
+            child: Row(
+              children: const [
+                Icon(Icons.school, size: 16, color: Colors.grey),
+                SizedBox(width: 6),
+                Text('Secundaria', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
+              ],
+            ),
           ),
           ..._gradosPorNivel['Secundaria']!.map((grado) {
             return SimpleDialogOption(
@@ -185,9 +251,15 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
             child: Divider(),
           ),
           // Preparatoria
-          const Padding(
-            padding: EdgeInsets.only(left: 16.0, top: 8.0, bottom: 8.0),
-            child: Text('👨‍🎓 Preparatoria', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
+          Padding(
+            padding: const EdgeInsets.only(left: 16.0, top: 8.0, bottom: 8.0),
+            child: Row(
+              children: const [
+                Icon(Icons.school_outlined, size: 16, color: Colors.grey),
+                SizedBox(width: 6),
+                Text('Preparatoria', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
+              ],
+            ),
           ),
           ..._gradosPorNivel['Preparatoria']!.map((grado) {
             return SimpleDialogOption(
@@ -326,14 +398,26 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
               setState(() => _tipoUsuario = 'estudiantes');
               Navigator.pop(context);
             },
-            child: const Text('👥 Estudiantes'),
+            child: Row(
+              children: const [
+                Icon(Icons.groups_outlined, size: 16, color: Colors.grey),
+                SizedBox(width: 6),
+                Text('Estudiantes'),
+              ],
+            ),
           ),
           SimpleDialogOption(
             onPressed: () {
               setState(() => _tipoUsuario = 'maestros');
               Navigator.pop(context);
             },
-            child: const Text('👨‍🏫 Maestros'),
+            child: Row(
+              children: const [
+                Icon(Icons.person_outline, size: 16, color: Colors.grey),
+                SizedBox(width: 6),
+                Text('Maestros'),
+              ],
+            ),
           ),
         ],
       ),
@@ -390,13 +474,15 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gestión de Usuarios (Estudiantes y Maestros)'),
+        title: Text(_isMaestro 
+          ? 'Gestión de Alumnos' 
+          : 'Gestión de Usuarios (Estudiantes y Maestros)'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: _isMaestro ? null : FloatingActionButton(
         onPressed: _mostrarFormularioNuevo,
         tooltip: 'Nuevo Estudiante',
         child: const Icon(Icons.add),
@@ -429,19 +515,21 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    // Filtro de tipo de usuario
-                    FilterChip(
-                      label: const Text('Tipo'),
-                      onSelected: (_) => _mostrarFiltroTipoUsuario(),
-                    ),
-
-                    // Mostrar tipo seleccionado
-                    if (_tipoUsuario != 'todos')
-                      Chip(
-                        label: Text(_getEtiquetaTipoUsuario(_tipoUsuario)),
-                        onDeleted: () => setState(() => _tipoUsuario = 'todos'),
-                        deleteIcon: const Icon(Icons.close, size: 18),
+                    // Filtro de tipo de usuario (solo admin)
+                    if (!_isMaestro) ...[
+                      FilterChip(
+                        label: const Text('Tipo'),
+                        onSelected: (_) => _mostrarFiltroTipoUsuario(),
                       ),
+
+                      // Mostrar tipo seleccionado
+                      if (_tipoUsuario != 'todos')
+                        Chip(
+                          label: Text(_getEtiquetaTipoUsuario(_tipoUsuario)),
+                          onDeleted: () => setState(() => _tipoUsuario = 'todos'),
+                          deleteIcon: const Icon(Icons.close, size: 18),
+                        ),
+                    ],
 
                     // Filtro de grado
                     FilterChip(
@@ -553,47 +641,120 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
                             children: [
                               const SizedBox(height: 4),
                               Text(usr.email, style: const TextStyle(fontSize: 12)),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 6),
                               Row(
                                 children: [
                                   // Mostrar grado solo si es estudiante
                                   if (usr.tipoUsuario == 'alumno')
                                     Expanded(
                                       child: Text(
-                                        'Grado: ${_traducirGrado(usr.gradoId)}',
-                                        style: const TextStyle(fontSize: 12),
+                                        'Grado: ${_traducirGrado(usr.gradoId, gradoNombre: usr.gradoNombre)}',
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
                                       ),
                                     )
                                   else
                                     Expanded(
-                                      child: Text(
-                                        'Rol: ${usr.tipoUsuario == 'maestro' ? '👨‍🏫 Maestro' : '⚙️ Admin'}',
-                                        style: const TextStyle(fontSize: 12),
+                                      child: Row(
+                                        children: [
+                                          const Text(
+                                            'Rol: ',
+                                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                                          ),
+                                          Icon(
+                                            usr.tipoUsuario == 'maestro' ? Icons.person_outline : Icons.admin_panel_settings_outlined,
+                                            size: 14,
+                                            color: Colors.grey[700],
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            usr.tipoUsuario == 'maestro' ? 'Maestro' : 'Admin',
+                                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                  const SizedBox(width: 12),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              // Badge de estado en su propia fila
+                              Row(
+                                children: [
                                   // Mostrar estado de aprobación si es maestro
                                   if (usr.tipoUsuario == 'maestro')
-                                    Chip(
-                                      label: Text(
-                                        (usr.aprobado ?? false) ? 'Aprobado' : 'Pendiente',
-                                        style: const TextStyle(fontSize: 11),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: (usr.aprobado ?? false)
+                                            ? Colors.green.shade100
+                                            : Colors.orange.shade100,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: (usr.aprobado ?? false)
+                                              ? Colors.green.shade300
+                                              : Colors.orange.shade300,
+                                        ),
                                       ),
-                                      backgroundColor: (usr.aprobado ?? false)
-                                          ? Colors.green.shade100
-                                          : Colors.orange.shade100,
-                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            (usr.aprobado ?? false) ? Icons.check_circle : Icons.pending,
+                                            size: 14,
+                                            color: (usr.aprobado ?? false)
+                                                ? Colors.green.shade700
+                                                : Colors.orange.shade700,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            (usr.aprobado ?? false) ? 'Aprobado' : 'Pendiente',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: (usr.aprobado ?? false)
+                                                  ? Colors.green.shade700
+                                                  : Colors.orange.shade700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     )
                                   else
-                                    Chip(
-                                      label: Text(
-                                        usr.activo ? 'Activo' : 'Inactivo',
-                                        style: const TextStyle(fontSize: 11),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: usr.activo
+                                            ? Colors.green.shade100
+                                            : Colors.red.shade100,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: usr.activo
+                                              ? Colors.green.shade300
+                                              : Colors.red.shade300,
+                                        ),
                                       ),
-                                      backgroundColor: usr.activo
-                                          ? Colors.green.shade100
-                                          : Colors.red.shade100,
-                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            usr.activo ? Icons.check_circle : Icons.cancel,
+                                            size: 14,
+                                            color: usr.activo
+                                                ? Colors.green.shade700
+                                                : Colors.red.shade700,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            usr.activo ? 'Activo' : 'Inactivo',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: usr.activo
+                                                  ? Colors.green.shade700
+                                                  : Colors.red.shade700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                 ],
                               ),
@@ -669,10 +830,20 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
                                           if (mounted) {
                                             ScaffoldMessenger.of(context).showSnackBar(
                                               SnackBar(
-                                                content: Text(
-                                                  success
-                                                      ? '🗑️ ${usr.nombre} eliminado'
-                                                      : '⚠️ Error al eliminar',
+                                                content: Row(
+                                                  children: [
+                                                    Icon(
+                                                      success ? Icons.delete_outline : Icons.warning_amber_outlined,
+                                                      size: 18,
+                                                      color: Colors.white,
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      success
+                                                          ? '${usr.nombre} eliminado'
+                                                          : 'Error al eliminar',
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
                                             );
@@ -689,16 +860,19 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
                               }
                             },
                             itemBuilder: (BuildContext context) => [
-                              const PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.edit, size: 18, color: Colors.blue),
-                                    SizedBox(width: 8),
-                                    Text('Editar'),
-                                  ],
+                              // Editar (solo admin)
+                              if (!_isMaestro)
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.edit, size: 18, color: Colors.blue),
+                                      SizedBox(width: 8),
+                                      Text('Editar'),
+                                    ],
+                                  ),
                                 ),
-                              ),
+                              // Deshabilitar/Habilitar (admin y maestro)
                               PopupMenuItem(
                                 value: 'toggle',
                                 child: Row(
@@ -713,16 +887,18 @@ class _AdminEstudiantesScreenState extends State<AdminEstudiantesScreen> {
                                   ],
                                 ),
                               ),
-                              const PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.delete, size: 18, color: Colors.red),
-                                    SizedBox(width: 8),
-                                    Text('Eliminar'),
-                                  ],
+                              // Eliminar (solo admin)
+                              if (!_isMaestro)
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.delete, size: 18, color: Colors.red),
+                                      SizedBox(width: 8),
+                                      Text('Eliminar'),
+                                    ],
+                                  ),
                                 ),
-                              ),
                             ],
                             child: const Icon(Icons.more_vert, size: 20),
                           ),
@@ -764,7 +940,7 @@ class FormularioEstudiante extends StatefulWidget {
 class _FormularioEstudianteState extends State<FormularioEstudiante> {
   final _nombreController = TextEditingController();
   final _emailController = TextEditingController();
-  String _gradoId = '4P';
+  String? _gradoId = '4P'; // CAMBIO: Ahora nullable para maestros
   Set<String> _rolesSeleccionados = {'estudiante'}; // Múltiples roles
   late AdminService _adminService;
   late bool _isEditing;
@@ -779,8 +955,16 @@ class _FormularioEstudianteState extends State<FormularioEstudiante> {
       final est = widget.estudiante!;
       _nombreController.text = est.nombre;
       _emailController.text = est.email;
-      _gradoId = est.gradoId ?? '4P';
-      _rolesSeleccionados = est.roles.isNotEmpty ? Set.from(est.roles) : {'estudiante'};
+      _gradoId = est.gradoId; // CAMBIO: Permitir null para maestros
+      
+      // Detectar roles desde tipoUsuario
+      if (est.tipoUsuario == 'admin') {
+        _rolesSeleccionados = {'admin'};
+      } else if (est.tipoUsuario == 'maestro') {
+        _rolesSeleccionados = {'profesor'};
+      } else {
+        _rolesSeleccionados = est.roles.isNotEmpty ? Set.from(est.roles) : {'estudiante'};
+      }
     }
   }
 
@@ -923,24 +1107,65 @@ class _FormularioEstudianteState extends State<FormularioEstudiante> {
                           style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey),
                         ),
                         const SizedBox(height: 8),
-                        DropdownButtonFormField<String>(
-                          value: _gradoId,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black),
-                          items: todosGrados.map((grado) {
-                            return DropdownMenuItem(
-                              value: grado['valor'],
-                              child: Text('${grado['emoji']} ${grado['label']}'),
+                        Builder(
+                          builder: (context) {
+                            // Asegurar que el valor actual esté en la lista disponible
+                            final valoresDisponibles = todosGrados.map((g) => g['valor'] as String).toList();
+                            String valorActual = _gradoId ?? '4P';
+                            
+                            // Si el valor actual no está en la lista, usar el primero disponible
+                            if (!valoresDisponibles.contains(valorActual)) {
+                              valorActual = valoresDisponibles.isNotEmpty ? valoresDisponibles.first : '4P';
+                              // Actualizar el estado solo si cambió
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (_gradoId != valorActual) {
+                                  setState(() => _gradoId = valorActual);
+                                }
+                              });
+                            }
+                            
+                            return DropdownButtonFormField<String>(
+                              value: valorActual,
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black),
+                              items: todosGrados.map((grado) {
+                                // Determinar ícono según el grado
+                                IconData icono = Icons.school;
+                                Color colorIcono = Colors.blue;
+                                
+                                final valor = grado['valor'] as String;
+                                if (valor.contains('P')) {
+                                  icono = Icons.child_care;
+                                  colorIcono = Colors.blue.shade600;
+                                } else if (valor.contains('S')) {
+                                  icono = Icons.school_outlined;
+                                  colorIcono = Colors.purple.shade600;
+                                } else if (valor.contains('EMS') || valor.contains('Prep')) {
+                                  icono = Icons.auto_stories;
+                                  colorIcono = Colors.orange.shade600;
+                                }
+                                
+                                return DropdownMenuItem(
+                                  value: grado['valor'],
+                                  child: Row(
+                                    children: [
+                                      Icon(icono, size: 18, color: colorIcono),
+                                      const SizedBox(width: 8),
+                                      Text(grado['label'] as String),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (value) => setState(() => _gradoId = value ?? valorActual),
+                              decoration: InputDecoration(
+                                hintText: 'Selecciona el grado',
+                                prefixIcon: const Icon(Icons.school_outlined),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                filled: true,
+                                fillColor: Colors.grey[50],
+                              ),
                             );
-                          }).toList(),
-                          onChanged: (value) => setState(() => _gradoId = value ?? '4P'),
-                          decoration: InputDecoration(
-                            hintText: 'Selecciona el grado',
-                            prefixIcon: const Icon(Icons.school_outlined),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            filled: true,
-                            fillColor: Colors.grey[50],
-                          ),
+                          },
                         ),
                         const SizedBox(height: 24),
                       ],
@@ -958,9 +1183,18 @@ class _FormularioEstudianteState extends State<FormularioEstudiante> {
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Colors.blue[200]!, width: 1),
                       ),
-                      child: const Text(
-                        '📌 El usuario podrá iniciar sesión con su correo y contraseña: planea123. Podrá cambiarla después.',
-                        style: TextStyle(fontSize: 11, color: Colors.blue),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Icon(Icons.info_outline, size: 14, color: Colors.blue),
+                          SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'El usuario podrá iniciar sesión con su correo y contraseña: planea123. Podrá cambiarla después.',
+                              style: TextStyle(fontSize: 11, color: Colors.blue),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -1000,21 +1234,36 @@ class _FormularioEstudianteState extends State<FormularioEstudiante> {
                     String mensaje = '';
 
                     if (_isEditing) {
-                      // Actualizar estudiante existente
-                      success = await _adminService.actualizarEstudiante(
-                        id: widget.estudiante!.id,
-                        nombre: _nombreController.text,
-                        gradoId: _gradoId,
-                      );
+                      // Actualizar estudiante/maestro existente
+                      // Solo actualizar gradoId si es estudiante (tiene grado)
+                      if (_rolesSeleccionados.contains('estudiante')) {
+                        success = await _adminService.actualizarEstudiante(
+                          id: widget.estudiante!.id,
+                          nombre: _nombreController.text,
+                          gradoId: _gradoId ?? '4P',
+                        );
+                      } else {
+                        // Para maestros/admin, solo actualizar nombre (sin gradoId)
+                        success = await _adminService.actualizarEstudiante(
+                          id: widget.estudiante!.id,
+                          nombre: _nombreController.text,
+                          gradoId: widget.estudiante!.gradoId ?? '4P', // Mantener el grado original
+                        );
+                      }
                       mensaje = success
-                          ? '✅ Estudiante actualizado exitosamente'
+                          ? '✅ Usuario actualizado exitosamente'
                           : '❌ Error al actualizar';
                     } else {
-                      // Crear nuevo estudiante
+                      // Crear nuevo usuario
+                      // Solo enviar gradoId si es estudiante
+                      final gradoFinal = _rolesSeleccionados.contains('estudiante') 
+                          ? (_gradoId ?? '4P')
+                          : '4P'; // Valor por defecto para no-estudiantes (no se usa)
+                      
                       success = await _adminService.crearEstudiante(
                         nombre: _nombreController.text,
                         email: _emailController.text,
-                        gradoId: _gradoId,
+                        gradoId: gradoFinal,
                         roles: _rolesSeleccionados.toList(),
                       );
                       mensaje = success

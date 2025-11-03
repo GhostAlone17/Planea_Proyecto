@@ -16,16 +16,37 @@ class ReportsService {
   /// Obtiene lista de grados únicos desde la colección de usuarios
   Future<List<String>> obtenerGradosDisponibles() async {
     try {
+      print('🔍 DEBUG - Consultando todos los alumnos...');
       final snapshot = await _firestore
           .collection('usuarios')
           .where('tipoUsuario', isEqualTo: 'alumno')
           .get();
+      
+      print('🔍 DEBUG - Total de alumnos encontrados: ${snapshot.docs.length}');
 
       final gradosSet = <String>{};
       for (var doc in snapshot.docs) {
         try {
           final data = doc.data();
-          final grado = data['gradoNombre'] as String?;
+          var grado = data['gradoNombre'] as String?;
+          final gradoId = data['gradoId'] as String?;
+          final nombre = data['nombre'] as String? ?? 'Sin nombre';
+          
+          // Si no tiene gradoNombre, inferir del gradoId
+          if (grado == null || grado.isEmpty) {
+            if (gradoId != null && gradoId.isNotEmpty) {
+              if (gradoId.endsWith('P') && gradoId != 'Prep' && !gradoId.contains('EMS')) {
+                grado = 'Primaria';
+              } else if (gradoId.endsWith('S') && !gradoId.contains('EMS')) {
+                grado = 'Secundaria';
+              } else if (gradoId.contains('Prep') || gradoId.contains('EMS')) {
+                grado = 'Preparatoria';
+              }
+            }
+          }
+          
+          print('   📄 Alumno: $nombre, gradoNombre: "${grado ?? "NULL"}", gradoId: "${gradoId ?? "NULL"}"');
+          
           if (grado != null && grado.isNotEmpty) {
             gradosSet.add(grado);
           }
@@ -36,6 +57,7 @@ class ReportsService {
       }
 
       final gradosList = gradosSet.toList()..sort();
+      print('🔍 DEBUG - Grados únicos encontrados: $gradosList');
       return gradosList.isEmpty ? ['Sin grado asignado'] : gradosList;
     } catch (e) {
       print('❌ Error obteniendo grados disponibles: $e');
@@ -50,7 +72,9 @@ class ReportsService {
     required String gradoNombre,
   }) async {
     try {
+      print('🔍 DEBUG - Buscando estudiantes para grado: "$gradoNombre"');
       final estudiantes = await obtenerEstudiantesPorGrado(gradoNombre: gradoNombre);
+      print('🔍 DEBUG - Estudiantes encontrados: ${estudiantes.length}');
       final desempenoPorCategoria = await obtenerDesempenoPorCategoria(gradoNombre: gradoNombre);
 
       int totalTests = 0;
@@ -89,8 +113,8 @@ class ReportsService {
   /// Obtiene reporte consolidado de TODOS los grados
   Future<Map<String, dynamic>> obtenerReporteTodosGrados() async {
     try {
-      // 🔄 AHORA DINÁMICO: Obtener grados desde Firestore
-      final grados = await obtenerGradosDisponibles();
+      // ✅ FIJO: Incluir TODOS los grados SIEMPRE, aunque no tengan estudiantes
+      final grados = ['Primaria', 'Secundaria', 'Preparatoria'];
       final reportesPorGrado = <String, Map<String, dynamic>>{};
       
       int totalEstudiantesGlobal = 0;
@@ -98,9 +122,13 @@ class ReportsService {
       int totalAciertosGlobal = 0;
       int totalIntentosGlobal = 0;
 
+      print('🔍 DEBUG CONSOLIDADO - Generando reporte para todos los grados: $grados');
+
       for (var grado in grados) {
         final reporte = await obtenerReporteGeneral(gradoNombre: grado);
         reportesPorGrado[grado] = reporte;
+        
+        print('   📊 Grado: $grado - Estudiantes: ${reporte['totalEstudiantes'] ?? 0}');
         
         if (reporte.isNotEmpty) {
           totalEstudiantesGlobal += reporte['totalEstudiantes'] as int;
@@ -143,11 +171,38 @@ class ReportsService {
       final reporteData = <String, dynamic>{};
 
       // Primero, obtener estudiantes del grado
-      final estudiantesSnapshot = await _firestore
+      print('🔍 DEBUG CATEGORIAS - Buscando estudiantes para grado: "$gradoNombre"');
+      var estudiantesSnapshot = await _firestore
           .collection('usuarios')
           .where('gradoNombre', isEqualTo: gradoNombre)
           .where('tipoUsuario', isEqualTo: 'alumno')
           .get();
+      
+      print('🔍 DEBUG CATEGORIAS - Estudiantes encontrados con gradoNombre: ${estudiantesSnapshot.docs.length}');
+      
+      // Si no encuentra, intentar con gradoId (respaldo legacy)
+      if (estudiantesSnapshot.docs.isEmpty) {
+        print('⚠️ No se encontraron estudiantes con gradoNombre, intentando con gradoId...');
+        
+        List<String> gradoIds = [];
+        if (gradoNombre.toLowerCase() == 'primaria') {
+          gradoIds = ['1P', '2P', '3P', '4P', '5P', '6P'];
+        } else if (gradoNombre.toLowerCase() == 'secundaria') {
+          gradoIds = ['1S', '2S', '3S'];
+        } else if (gradoNombre.toLowerCase() == 'preparatoria') {
+          gradoIds = ['1Prep', '2Prep', '3Prep', '10EMS', '11EMS', '12EMS'];
+        }
+        
+        if (gradoIds.isNotEmpty) {
+          estudiantesSnapshot = await _firestore
+              .collection('usuarios')
+              .where('tipoUsuario', isEqualTo: 'alumno')
+              .where('gradoId', whereIn: gradoIds)
+              .get();
+          
+          print('🔍 DEBUG CATEGORIAS - Estudiantes encontrados con gradoId: ${estudiantesSnapshot.docs.length}');
+        }
+      }
 
       for (var doc in categoriasSnapshot.docs) {
         final categoriaId = doc.id;
@@ -158,12 +213,16 @@ class ReportsService {
         final estudiantesInfo = <String, Map<String, dynamic>>{};
 
         // ✅ NUEVO: Iterar sobre estudiantes del grado y obtener su desempeño por categoría
+        int estudiantesConDatos = 0;
+        int estudiantesSinDatos = 0;
+        
         for (var estudianteDoc in estudiantesSnapshot.docs) {
           final nombreEstudiante = estudianteDoc.data()['nombre'] as String? ?? 'Sin nombre';
+          final estudianteId = estudianteDoc.id;
           
           final reporteRef = await _firestore
               .collection('reportes_estudiantes')
-              .doc(estudianteDoc.id)
+              .doc(estudianteId)
               .get();
 
           if (reporteRef.exists) {
@@ -178,13 +237,25 @@ class ReportsService {
               totalAciertos += aciertos;
               totalIntentos += intentos;
 
-              estudiantesInfo[nombreEstudiante] = {
+              // Usar ID en lugar del nombre para evitar duplicados cuando hay nombres iguales
+              estudiantesInfo[estudianteId] = {
+                'nombre': nombreEstudiante,
                 'aciertos': aciertos,
                 'intentos': intentos,
                 'porcentaje': intentos > 0 ? (aciertos / intentos * 100) : 0.0,
               };
+              estudiantesConDatos++;
+            } else {
+              estudiantesSinDatos++;
             }
+          } else {
+            estudiantesSinDatos++;
           }
+        }
+        
+        // Log informativo
+        if (estudiantesConDatos > 0 || estudiantesSinDatos > 0) {
+          print('   📊 Categoría "$nombreCategoria": $estudiantesConDatos con datos, $estudiantesSinDatos sin datos');
         }
 
         if (estudiantesInfo.isNotEmpty) {
@@ -213,11 +284,47 @@ class ReportsService {
     required String gradoNombre,
   }) async {
     try {
-      final snapshot = await _firestore
+      print('🔍 DEBUG - Query: gradoNombre == "$gradoNombre" AND tipoUsuario == "alumno"');
+      
+      // Primero intentar buscar por gradoNombre
+      var snapshot = await _firestore
           .collection('usuarios')
           .where('gradoNombre', isEqualTo: gradoNombre)
           .where('tipoUsuario', isEqualTo: 'alumno')
           .get();
+      
+      print('🔍 DEBUG - Documentos encontrados con gradoNombre: ${snapshot.docs.length}');
+      
+      // Si no encuentra, intentar con gradoId (mapeo de legacy)
+      if (snapshot.docs.isEmpty) {
+        print('⚠️ No se encontraron estudiantes con gradoNombre, intentando con gradoId...');
+        
+        // Mapeo de gradoNombre a gradoId posibles
+        List<String> gradoIds = [];
+        if (gradoNombre.toLowerCase() == 'primaria') {
+          gradoIds = ['1P', '2P', '3P', '4P', '5P', '6P'];
+        } else if (gradoNombre.toLowerCase() == 'secundaria') {
+          gradoIds = ['1S', '2S', '3S'];
+        } else if (gradoNombre.toLowerCase() == 'preparatoria') {
+          gradoIds = ['1Prep', '2Prep', '3Prep', '10EMS', '11EMS', '12EMS'];
+        }
+        
+        if (gradoIds.isNotEmpty) {
+          snapshot = await _firestore
+              .collection('usuarios')
+              .where('tipoUsuario', isEqualTo: 'alumno')
+              .where('gradoId', whereIn: gradoIds)
+              .get();
+          
+          print('🔍 DEBUG - Documentos encontrados con gradoId (${gradoIds.join(", ")}): ${snapshot.docs.length}');
+        }
+      }
+      
+      // Log de muestra de los primeros documentos
+      for (var i = 0; i < snapshot.docs.length && i < 3; i++) {
+        final doc = snapshot.docs[i];
+        print('   📄 Estudiante ${i + 1}: ${doc.data()['nombre']} - gradoNombre: "${doc.data()['gradoNombre']}", gradoId: "${doc.data()['gradoId']}"');
+      }
 
       final estudiantes = <Map<String, dynamic>>[];
 
@@ -242,11 +349,12 @@ class ReportsService {
           totalIntentos = data['totalIntentos'] as int? ?? 0;
           totalTests = data['totalTestsRealizados'] as int? ?? 0;
           porcentaje = data['promedioGeneral'] as double? ?? 0.0;
-          print('   ✅ Reporte encontrado para $nombre: $totalTests tests, $totalAciertos aciertos');
+          print('   ✅ Reporte encontrado para $nombre: $totalTests tests, $totalAciertos aciertos, ${porcentaje.toStringAsFixed(1)}%');
         } else {
-          print('   ⚠️ No hay reporte para $nombre');
+          print('   ℹ️ $nombre aún no ha realizado tests (sin datos de reporte)');
         }
 
+        // ✅ INCLUIR estudiante incluso si no tiene reporte (mostrará 0 tests)
         estudiantes.add({
           'id': doc.id,
           'nombre': nombre,
@@ -626,7 +734,7 @@ class ReportsService {
                               children: [
                                 pw.Padding(
                                   padding: pw.EdgeInsets.all(4),
-                                  child: pw.Text(e.key),
+                                  child: pw.Text(e.value['nombre'] ?? e.key), // Usar el nombre del value, no la key (ID)
                                 ),
                                 pw.Padding(
                                   padding: pw.EdgeInsets.all(4),

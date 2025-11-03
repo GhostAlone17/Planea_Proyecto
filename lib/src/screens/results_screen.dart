@@ -22,7 +22,35 @@ class ResultsScreen extends StatefulWidget {
   State<ResultsScreen> createState() => _ResultsScreenState();
 }
 
-class _ResultsScreenState extends State<ResultsScreen> {
+class _ResultsScreenState extends State<ResultsScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
+    );
+    
+    _scaleAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.elasticOut),
+    );
+    
+    _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,96 +68,107 @@ class _ResultsScreenState extends State<ResultsScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Sección de calificación GRANDE
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    _getColorForNivel(nivel),
-                    _getColorForNivel(nivel).withOpacity(0.7),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              padding: const EdgeInsets.all(AppConstants.paddingLarge * 2),
-              child: Column(
-                children: [
-                  Text(
-                    'Test: ${widget.category.nombre}',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Colors.white70,
+            // Sección de calificación GRANDE con animación
+            AnimatedBuilder(
+              animation: _animationController,
+              builder: (context, child) {
+                return FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: ScaleTransition(
+                    scale: _scaleAnimation,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            _getColorForNivel(nivel),
+                            _getColorForNivel(nivel).withOpacity(0.7),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingLarge),
-                  
-                  // Porcentaje GIGANTE
-                  Text(
-                    '$porcentaje%',
-                    style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 72,
-                        ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingMedium),
-                  
-                  // Nivel de logro con badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.paddingLarge,
-                      vertical: AppConstants.paddingSmall,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.25),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withOpacity(0.5)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _getIconForNivel(nivel),
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          nivel,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
+                      ),
+                      padding: const EdgeInsets.all(AppConstants.paddingLarge * 2),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Test: ${widget.category.nombre}',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  color: Colors.white70,
+                                ),
+                          ),
+                          const SizedBox(height: AppConstants.paddingLarge),
+                          
+                          // Porcentaje GIGANTE
+                          Text(
+                            '$porcentaje%',
+                            style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 72,
+                                ),
+                          ),
+                          const SizedBox(height: AppConstants.paddingMedium),
+                          
+                          // Nivel de logro con badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppConstants.paddingLarge,
+                              vertical: AppConstants.paddingSmall,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: Colors.white.withOpacity(0.5)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _getIconForNivel(nivel),
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  nivel,
+                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          
+                          const SizedBox(height: AppConstants.paddingLarge * 1.5),
+                          
+                          // Tarjetas de estadísticas en fila
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildDetailCard(
+                                'Correctas',
+                                widget.correct.toString(),
+                                Colors.white,
                               ),
-                        ),
-                      ],
+                              _buildDetailCard(
+                                'Incorrectas',
+                                incorrectas.toString(),
+                                Colors.white,
+                              ),
+                              _buildDetailCard(
+                                'Total',
+                                widget.total.toString(),
+                                Colors.white,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  
-                  const SizedBox(height: AppConstants.paddingLarge * 1.5),
-                  
-                  // Tarjetas de estadísticas en fila
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildDetailCard(
-                        'Correctas',
-                        widget.correct.toString(),
-                        Colors.white,
-                      ),
-                      _buildDetailCard(
-                        'Incorrectas',
-                        incorrectas.toString(),
-                        Colors.white,
-                      ),
-                      _buildDetailCard(
-                        'Total',
-                        widget.total.toString(),
-                        Colors.white,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                );
+              },
             ),
 
             // Sección de análisis detallado
@@ -138,11 +177,21 @@ class _ResultsScreenState extends State<ResultsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '📊 Análisis Detallado',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.analytics_outlined,
+                        color: Theme.of(context).primaryColor,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Análisis Detallado',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: AppConstants.paddingMedium),
                   
@@ -241,24 +290,42 @@ class _ResultsScreenState extends State<ResultsScreen> {
                 children: [
                   ElevatedButton.icon(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.home),
-                    label: const Text('Volver a Categorías'),
+                    icon: const Icon(Icons.home_rounded, size: 22),
+                    label: const Text(
+                      'Volver a Categorías',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 2,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   OutlinedButton.icon(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Intentar de Nuevo'),
+                    icon: const Icon(Icons.refresh_rounded, size: 22),
+                    label: const Text(
+                      'Intentar de Nuevo',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      side: BorderSide(
+                        color: Theme.of(context).primaryColor,
+                        width: 2,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 24),
           ],
         ),
       ),
@@ -266,24 +333,34 @@ class _ResultsScreenState extends State<ResultsScreen> {
   }
 
   Widget _buildDetailCard(String label, String value, Color color) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: color,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            color: color.withOpacity(0.9),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: color.withOpacity(0.9),
+              fontWeight: FontWeight.w500,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

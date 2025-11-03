@@ -26,8 +26,23 @@ class _LoginScreenState extends State<LoginScreen>
   bool _isLogin = true;
   bool _showPassword = false;
   String _tipoUsuario = 'alumno'; // ✨ NUEVO: Por defecto alumno
-  String _gradoNombre = 'Primaria'; // ✨ NUEVO: Grado para alumnos
+  String _gradoNombre = 'Primaria'; // ✨ NUEVO: Nivel educativo
+  String _gradoId = '4P'; // ✨ NUEVO: Primer grado disponible por defecto
   bool _isHoveringLink = false; // ✨ NUEVO: Para efecto hover del enlace
+  
+  // ✨ GRADOS DISPONIBLES (sincronizados con el sistema)
+  final Map<String, List<Map<String, String>>> _gradosPorNivel = {
+    'Primaria': [
+      {'valor': '4P', 'label': '4° Primaria'},
+      {'valor': '6P', 'label': '6° Primaria'},
+    ],
+    'Secundaria': [
+      {'valor': '3S', 'label': '3° Secundaria'},
+    ],
+    'Preparatoria': [
+      {'valor': '12EMS', 'label': '3° Preparatoria'},
+    ],
+  };
 
   @override
   void initState() {
@@ -97,13 +112,14 @@ class _LoginScreenState extends State<LoginScreen>
         }
       }
     } else {
-      // ✨ AUTOREGISTRO: Pasar tipoUsuario y gradoNombre
+      // ✨ AUTOREGISTRO: Pasar tipoUsuario, gradoNombre y gradoId específico
       success = await authService.register(
         email: _email,
         password: _password,
         displayName: _nombre,
         tipoUsuario: _tipoUsuario,
         gradoNombre: _tipoUsuario == 'alumno' ? _gradoNombre : null,
+        gradoId: _tipoUsuario == 'alumno' ? _gradoId : null, // ✨ Año específico
         mantenerSesion: false,
       );
       
@@ -388,12 +404,23 @@ class _LoginScreenState extends State<LoginScreen>
                                       ),
                                     ),
 
-                                  // ✨ NUEVO: Selector de grado para alumnos
+                                  // ✨ NUEVO: Selector de nivel educativo para alumnos
                                   if (_tipoUsuario == 'alumno')
                                     Padding(
                                       padding: const EdgeInsets.only(top: 12),
                                       child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
+                                          // Selector de Nivel
+                                          Text(
+                                            'Nivel Educativo',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.grey.shade700,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 12),
                                             decoration: BoxDecoration(
@@ -450,11 +477,67 @@ class _LoginScreenState extends State<LoginScreen>
                                                   ),
                                                 ],
                                                 onChanged: (value) {
-                                                  setState(() => _gradoNombre = value ?? 'Primaria');
+                                                  setState(() {
+                                                    _gradoNombre = value ?? 'Primaria';
+                                                    // Resetear a primer grado del nuevo nivel
+                                                    final primerosGrados = _gradosPorNivel[_gradoNombre];
+                                                    if (primerosGrados != null && primerosGrados.isNotEmpty) {
+                                                      _gradoId = primerosGrados[0]['valor']!;
+                                                    }
+                                                  });
                                                 },
                                               ),
                                             ),
                                           ),
+                                          
+                                          const SizedBox(height: 12),
+                                          
+                                          // ✨ NUEVO: Selector de Año Específico
+                                          Text(
+                                            'Año/Grado',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.grey.shade700,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey.shade50,
+                                              border: Border.all(
+                                                color: Colors.grey.shade300,
+                                                width: 1,
+                                              ),
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: DropdownButtonHideUnderline(
+                                              child: DropdownButton<String>(
+                                                value: _gradoId,
+                                                isExpanded: true,
+                                                items: _gradosPorNivel[_gradoNombre]?.map((grado) {
+                                                  return DropdownMenuItem(
+                                                    value: grado['valor'],
+                                                    child: Row(
+                                                      children: [
+                                                        Icon(Icons.grade, 
+                                                          color: Colors.green.shade600,
+                                                          size: 18,
+                                                        ),
+                                                        const SizedBox(width: 12),
+                                                        Text(grado['label']!),
+                                                      ],
+                                                    ),
+                                                  );
+                                                }).toList() ?? [],
+                                                onChanged: (value) {
+                                                  setState(() => _gradoId = value ?? _gradoId);
+                                                },
+                                              ),
+                                            ),
+                                          ),
+                                          
                                           const SizedBox(height: 8),
                                           Container(
                                             padding: const EdgeInsets.all(10),
@@ -474,7 +557,7 @@ class _LoginScreenState extends State<LoginScreen>
                                                 const SizedBox(width: 8),
                                                 Expanded(
                                                   child: Text(
-                                                    'Solo verás exámenes de tu grado',
+                                                    'Solo verás exámenes de tu grado específico',
                                                     style: TextStyle(
                                                       fontSize: 12,
                                                       color: Colors.blue.shade600,

@@ -8,6 +8,7 @@ import 'admin_maestros_validation_screen.dart';
 import '../user_profile_modal.dart';
 import '../cambiar_password_screen.dart';
 import '../../services/authentication_service.dart';
+import '../../services/admin_service.dart';
 import '../../utils/firestore_seed.dart';
 
 /// Dashboard Principal para Admin
@@ -186,7 +187,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             // Card: Estudiantes
             _buildAdminCard(
               icon: Icons.people,
-              title: '👥 Usuarios',
+              title: 'Usuarios',
               description: 'Gestionar padrón de estudiantes y calificaciones',
               color: Colors.blue,
               onTap: () => Navigator.push(
@@ -199,7 +200,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             // Card: Reactivos
             _buildAdminCard(
               icon: Icons.quiz,
-              title: '❓ Reactivos',
+              title: 'Reactivos',
               description: 'Crear y editar preguntas del examen',
               color: Colors.orange,
               onTap: () => Navigator.push(
@@ -212,7 +213,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             // Card: Categorías
             _buildAdminCard(
               icon: Icons.category,
-              title: '📂 Categorías',
+              title: 'Categorías',
               description: 'Gestionar temas: Álgebra, Geometría, etc.',
               color: Colors.purple,
               onTap: () => Navigator.push(
@@ -225,7 +226,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             // Card: Reportes
             _buildAdminCard(
               icon: Icons.bar_chart,
-              title: '📊 Reportes',
+              title: 'Reportes',
               description: 'Ver desempeño y estadísticas de estudiantes',
               color: Colors.teal,
               onTap: () => Navigator.push(
@@ -238,7 +239,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             // Card: Validar Maestros
             _buildAdminCard(
               icon: Icons.verified_user,
-              title: '✨ Validar Maestros',
+              title: 'Validar Maestros',
               description: 'Aprobar solicitudes de nuevos maestros',
               color: Colors.red,
               onTap: () => Navigator.push(
@@ -248,13 +249,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
             const SizedBox(height: 32),
 
-            // 🌱 Card: Seed Data (Inicializar Base de Datos)
+            // Card: Seed Data (Inicializar Base de Datos)
             _buildAdminCard(
-              icon: Icons.storage,
-              title: '🌱 Inicializar BD',
+              icon: Icons.cloud_upload,
+              title: 'Inicializar BD',
               description: 'Crear categorías y reactivos de prueba',
               color: Colors.green,
               onTap: () => _mostrarDialogoSeedData(),
+            ),
+            const SizedBox(height: 16),
+
+            // Card: Migrar GradoNombre
+            _buildAdminCard(
+              icon: Icons.sync,
+              title: 'Migrar GradoNombre',
+              description: 'Actualizar campo gradoNombre de usuarios (EMS → Preparatoria)',
+              color: Colors.amber,
+              onTap: () => _ejecutarMigracionGradoNombre(),
             ),
             const SizedBox(height: 32),
 
@@ -405,6 +416,131 @@ class _AdminDashboardState extends State<AdminDashboard> {
       );
 
       print('❌ Error en seed data: $e');
+    }
+  }
+
+  /// Ejecuta migración de gradoNombre para usuarios
+  Future<void> _ejecutarMigracionGradoNombre() async {
+    // Confirmar antes de ejecutar
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.sync, color: Colors.amber),
+            SizedBox(width: 12),
+            Text('Migrar GradoNombre'),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Esta migración actualizará el campo "gradoNombre" de todos los usuarios que no lo tengan.'),
+            SizedBox(height: 12),
+            Text('Mapeo:', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('• gradoId con "P" → Primaria'),
+            Text('• gradoId con "S" → Secundaria'),
+            Text('• gradoId con "Prep" o "EMS" → Preparatoria'),
+            SizedBox(height: 12),
+            Text('¿Deseas continuar?'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.amber,
+            ),
+            child: const Text('Ejecutar Migración'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true || !mounted) return;
+
+    // Mostrar diálogo de carga
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Migrando usuarios...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      // Ejecutar migración
+      final adminService = AdminService();
+      await adminService.migrarGradoNombreUsuarios();
+
+      if (!mounted) return;
+
+      // Cerrar diálogo de carga
+      Navigator.pop(context);
+
+      // Mostrar éxito
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green),
+              SizedBox(width: 12),
+              Text('¡Migración Completada!'),
+            ],
+          ),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Los usuarios sin gradoNombre han sido actualizados correctamente.'),
+              SizedBox(height: 12),
+              Text('Revisa la terminal para ver los detalles.'),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Aceptar'),
+            ),
+          ],
+        ),
+      );
+
+      print('✅ Migración de gradoNombre completada');
+    } catch (e) {
+      if (!mounted) return;
+
+      // Cerrar diálogo de carga
+      Navigator.pop(context);
+
+      // Mostrar error
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('❌ Error'),
+          content: Text('Error en migración: $e'),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Aceptar'),
+            ),
+          ],
+        ),
+      );
+
+      print('❌ Error en migración: $e');
     }
   }
 
